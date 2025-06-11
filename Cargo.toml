@@ -1,0 +1,34 @@
+[package]
+name = "docsee"
+version = "0.1.0"
+edition = "2021"
+description = "A beautiful Docker manager TUI application"
+authors = ["Xczer <xczermax@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/Xczer/docsee"
+
+[dependencies]
+# TUI framework
+ratatui = "0.29.0"
+crossterm = { version = "0.28", features = ["event-stream"] }
+
+# Docker client
+bollard = { version = "0.18.1", features = ["ssl"] }
+
+# Async runtime
+tokio = { version = "1.43.0", features = ["full"] }
+
+# Error handling
+color-eyre = "0.6.3"
+anyhow = "1.0"
+
+# CLI parsing
+clap = { version = "4.5.31", features = ["derive"] }
+
+# Utilities
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+byte-unit = "5.1"
+
+[dev-dependencies]
+tokio-test = "0.4"
