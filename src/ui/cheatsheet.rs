@@ -41,9 +41,9 @@ impl CheatSheet {
             .constraints([
                 Constraint::Length(3), // Global commands
                 Constraint::Length(8), // Container commands
-                Constraint::Length(6), // Images commands (placeholder)
-                Constraint::Length(6), // Volumes commands (placeholder)
-                Constraint::Length(6), // Networks commands (placeholder)
+                Constraint::Length(6), // Images commands
+                Constraint::Length(5), // Volumes commands
+                Constraint::Length(5), // Networks commands
                 Constraint::Min(1),    // Bottom padding
             ])
             .split(inner_area);
@@ -51,9 +51,9 @@ impl CheatSheet {
         // Draw each section
         self.draw_global_commands(frame, sections[0]);
         self.draw_container_commands(frame, sections[1]);
-        self.draw_placeholder_commands(frame, sections[2], "Images");
-        self.draw_placeholder_commands(frame, sections[3], "Volumes");
-        self.draw_placeholder_commands(frame, sections[4], "Networks");
+        self.draw_images_commands(frame, sections[2]);
+        self.draw_volumes_commands(frame, sections[3]);
+        self.draw_networks_commands(frame, sections[4]);
     }
 
     /// Draw global commands section
@@ -116,20 +116,72 @@ impl CheatSheet {
         frame.render_widget(paragraph, area);
     }
 
-    /// Draw placeholder commands for other tabs
-    fn draw_placeholder_commands(&self, frame: &mut Frame, area: Rect, tab_name: &str) {
+    /// Draw images commands section
+    fn draw_images_commands(&self, frame: &mut Frame, area: Rect) {
         let content = vec![
             Line::from(vec![
-                Span::styled(format!("{} Commands", tab_name), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled("Images Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             ]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("Coming soon!", Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC)),
-                Span::raw(" This tab will have commands for managing Docker "),
-                Span::raw(tab_name.to_lowercase()),
+                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("  Navigate images"),
             ]),
             Line::from(vec![
-                Span::raw("Commands will include: list, create, delete, inspect, and more..."),
+                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::raw("   Delete image        "),
+                Span::styled("p", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::raw("   Prune unused images"),
+            ]),
+        ];
+
+        let paragraph = Paragraph::new(content)
+            .style(Style::default().fg(Color::White));
+
+        frame.render_widget(paragraph, area);
+    }
+
+    /// Draw volumes commands section
+    fn draw_volumes_commands(&self, frame: &mut Frame, area: Rect) {
+        let content = vec![
+            Line::from(vec![
+                Span::styled("Volumes Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("  Navigate volumes     "),
+                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::raw("   Delete volume"),
+            ]),
+            Line::from(vec![
+                Span::styled("p", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::raw("   Prune unused volumes"),
+            ]),
+        ];
+
+        let paragraph = Paragraph::new(content)
+            .style(Style::default().fg(Color::White));
+
+        frame.render_widget(paragraph, area);
+    }
+
+    /// Draw networks commands section
+    fn draw_networks_commands(&self, frame: &mut Frame, area: Rect) {
+        let content = vec![
+            Line::from(vec![
+                Span::styled("Networks Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::raw("  Navigate networks    "),
+                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::raw("   Delete network"),
+            ]),
+            Line::from(vec![
+                Span::styled("p", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::raw("   Prune unused networks"),
             ]),
         ];
 
@@ -160,24 +212,3 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
         ])
         .split(popup_layout[1])[1]
 }
-
-/*
-EXPLANATION:
-- CheatSheet is a modal widget that displays all available commands
-- draw() creates a centered modal with a yellow border
-- The Clear widget erases the background behind the modal
-- centered_rect() calculates the position for a centered modal dialog
-- Content is split into sections for different command categories:
-  - Global commands: tab navigation, cheatsheet, quit
-  - Container commands: all the container management shortcuts
-  - Placeholder sections for other tabs (Images, Volumes, Networks)
-- Each command is color-coded:
-  - Green: navigation and safe operations
-  - Yellow: stop operations
-  - Red: destructive operations (delete, quit)
-  - Blue: restart operations
-  - Magenta: advanced operations (logs, exec)
-  - Gray: coming soon features
-- The modal uses proper styling with borders, colors, and formatting
-- This provides users with a quick reference without leaving the application
-*/

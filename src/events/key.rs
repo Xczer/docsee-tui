@@ -81,6 +81,7 @@ pub enum Key {
     Restart,        // 'r' - restart container
     Logs,           // 'l' - view logs
     Exec,           // 'e' - execute shell
+    Prune,          // 'p' - prune unused resources
 }
 
 impl Key {
@@ -244,6 +245,11 @@ impl From<event::KeyEvent> for Key {
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Exec,
+            event::KeyEvent {
+                code: event::KeyCode::Char('p'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Prune,
 
             // First check for char + modifier
             event::KeyEvent {

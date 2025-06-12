@@ -44,3 +44,5 @@ rust-project.json
 
 
 scratch/
+
+.llm-context

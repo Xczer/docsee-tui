@@ -7,8 +7,7 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, Borders, Tabs},
     Frame, Terminal,
 };
 use std::io::{self, stdout};
@@ -16,7 +15,7 @@ use std::io::{self, stdout};
 use crate::{
     docker::DockerClient,
     events::{AppEvent, EventConfig, EventHandler},
-    ui::{containers::ContainersTab, cheatsheet::CheatSheet},
+    ui::{containers::ContainersTab, images::ImagesTab, networks::NetworksTab, volumes::VolumesTab, cheatsheet::CheatSheet},
 };
 
 /// The main application state
@@ -34,6 +33,12 @@ pub struct App {
     show_cheatsheet: bool,
     /// The containers tab
     containers_tab: ContainersTab,
+    /// The images tab
+    images_tab: ImagesTab,
+    /// The volumes tab
+    volumes_tab: VolumesTab,
+    /// The networks tab
+    networks_tab: NetworksTab,
     /// The cheatsheet modal
     cheatsheet: CheatSheet,
 }
@@ -95,6 +100,9 @@ impl App {
         let docker_client = DockerClient::new(docker_host).await?;
         let event_handler = EventHandler::new(EventConfig::default());
         let containers_tab = ContainersTab::new(docker_client.clone()).await?;
+        let images_tab = ImagesTab::new(docker_client.clone()).await?;
+        let volumes_tab = VolumesTab::new(docker_client.clone()).await?;
+        let networks_tab = NetworksTab::new(docker_client.clone()).await?;
         let cheatsheet = CheatSheet::new();
 
         Ok(Self {
@@ -104,6 +112,9 @@ impl App {
             should_quit: false,
             show_cheatsheet: false,
             containers_tab,
+            images_tab,
+            volumes_tab,
+            networks_tab,
             cheatsheet,
         })
     }
@@ -189,13 +200,13 @@ impl App {
                         self.containers_tab.handle_key(key).await?;
                     }
                     TabType::Images => {
-                        // TODO: Handle images tab keys
+                        self.images_tab.handle_key(key).await?;
                     }
                     TabType::Volumes => {
-                        // TODO: Handle volumes tab keys
+                        self.volumes_tab.handle_key(key).await?;
                     }
                     TabType::Networks => {
-                        // TODO: Handle networks tab keys
+                        self.networks_tab.handle_key(key).await?;
                     }
                 }
             }
@@ -212,13 +223,13 @@ impl App {
                 self.containers_tab.refresh().await?;
             }
             TabType::Images => {
-                // TODO: Refresh images
+                self.images_tab.refresh().await?;
             }
             TabType::Volumes => {
-                // TODO: Refresh volumes
+                self.volumes_tab.refresh().await?;
             }
             TabType::Networks => {
-                // TODO: Refresh networks
+                self.networks_tab.refresh().await?;
             }
         }
 
@@ -250,13 +261,13 @@ impl App {
                     self.containers_tab.draw(frame, chunks[1]);
                 }
                 TabType::Images => {
-                    self.draw_placeholder(frame, chunks[1], "Images");
+                    self.images_tab.draw(frame, chunks[1]);
                 }
                 TabType::Volumes => {
-                    self.draw_placeholder(frame, chunks[1], "Volumes");
+                    self.volumes_tab.draw(frame, chunks[1]);
                 }
                 TabType::Networks => {
-                    self.draw_placeholder(frame, chunks[1], "Networks");
+                    self.networks_tab.draw(frame, chunks[1]);
                 }
             }
         }
@@ -282,42 +293,6 @@ impl App {
 
         frame.render_widget(tabs, area);
     }
-
-    /// Draw a placeholder for unimplemented tabs
-    fn draw_placeholder(&self, frame: &mut Frame, area: Rect, tab_name: &str) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(format!("{} Tab", tab_name));
-
-        let content = Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled(
-                    format!("{} tab is coming soon!", tab_name),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(""),
-            Line::from(vec![
-                Span::raw("Use "),
-                Span::styled("← →", Style::default().fg(Color::Green)),
-                Span::raw(" to switch tabs"),
-            ]),
-            Line::from(vec![
-                Span::raw("Press "),
-                Span::styled("c", Style::default().fg(Color::Green)),
-                Span::raw(" for cheatsheet"),
-            ]),
-            Line::from(vec![
-                Span::raw("Press "),
-                Span::styled("q", Style::default().fg(Color::Red)),
-                Span::raw(" to quit"),
-            ]),
-        ])
-        .block(block)
-        .style(Style::default().fg(Color::White));
-
-        frame.render_widget(content, area);
-    }
 }
 
 /*
@@ -333,6 +308,10 @@ EXPLANATION:
 - handle_tick() refreshes data periodically
 - draw() renders the entire UI using Ratatui
 - draw_tabs() creates the tab bar at the top
-- draw_placeholder() shows "coming soon" for unimplemented tabs
 - Terminal setup/cleanup ensures proper restoration when the app exits
+- All four tabs (Containers, Images, Volumes, Networks) are now fully implemented
+
+FIXES APPLIED:
+- Removed unused imports: Line, Span, Paragraph
+- Kept only the necessary imports for the current functionality
 */
