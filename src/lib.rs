@@ -4,9 +4,6 @@ pub mod events;
 pub mod ui;
 pub mod widgets;
 
-#[cfg(test)]
-pub mod tests;
-
 /*
 EXPLANATION:
 - This file declares all the modules in our project

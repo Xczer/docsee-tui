@@ -126,6 +126,9 @@ docsee/
 │   │   ├── mod.rs
 │   │   ├── networks.rs
 │   │   ├── tabs.rs
+│   │   ├── search_filter.rs
+│   │   ├── shell_executor.rs
+│   │   ├── stats_viewer.rs
 │   │   └── volumes.rs
 │   ├── widgets
 │   │   ├── mod.rs
@@ -136,7 +139,6 @@ docsee/
 │   └── main.rs
 ├── Cargo.lock
 ├── Cargo.toml
-├── IMPLEMENTATION_SUMMARY.md
 ├── Makefile
 └── README.md
 ```
@@ -196,18 +198,18 @@ Options:
 
 ## 🎯 Roadmap
 
-### Phase 1: Core Features ✅ *COMPLETED*
+### Phase 1: Core Features  ✅ *COMPLETED*
 - [x] Container management (start, stop, restart, delete)
 - [x] Image management (delete, prune)
 - [x] Volume management (list, delete, prune) ⭐ *NEW*
 - [x] Network management (list, delete, prune) ⭐ *NEW*
 - [x] Tab navigation and help system
 
-### Phase 2: Enhanced Features *(In Progress)*
-- [ ] **Container logs viewer** - Real-time log streaming
-- [ ] **Shell execution** - Interactive terminal access
-- [ ] **Container stats** - CPU, memory, network monitoring
-- [ ] **Search and filtering** - Find resources quickly
+### Phase 2: Enhanced Features ✅ *COMPLETED*
+- [x] **Container logs viewer** - Real-time log streaming
+- [x] **Shell execution** - Interactive terminal access
+- [x] **Container stats** - CPU, memory, network monitoring
+- [x] **Search and filtering** - Find resources quickly
 
 ### Phase 3: Advanced Features *(Planned)*
 - [ ] **Docker Compose** - Manage multi-container applications

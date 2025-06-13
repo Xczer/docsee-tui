@@ -7,7 +7,7 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Tabs},
+    widgets::{Block, Borders, Paragraph, Tabs},
     Frame, Terminal,
 };
 use std::io::{self, stdout};
@@ -15,13 +15,20 @@ use std::io::{self, stdout};
 use crate::{
     docker::DockerClient,
     events::{AppEvent, EventConfig, EventHandler},
-    ui::{containers::ContainersTab, images::ImagesTab, networks::NetworksTab, volumes::VolumesTab, cheatsheet::CheatSheet},
+    ui::{
+        cheatsheet::CheatSheet,
+        images::ImagesTab,
+        networks::NetworksTab,
+        volumes::VolumesTab,
+    },
 };
 
-/// The main application state
+// Import our enhanced containers tab
+use crate::ui::containers::{EnhancedContainersTab, ContainerViewMode};
+
+/// Enhanced application with Phase 2 features
 pub struct App {
     /// Docker client for API operations
-    #[allow(dead_code)]
     docker_client: DockerClient,
     /// Event handler for terminal input
     event_handler: EventHandler,
@@ -31,16 +38,20 @@ pub struct App {
     should_quit: bool,
     /// Whether the cheatsheet is currently shown
     show_cheatsheet: bool,
-    /// The containers tab
-    containers_tab: ContainersTab,
-    /// The images tab
+    /// Whether we're in a container sub-view
+    in_container_subview: bool,
+    /// Enhanced containers tab with Phase 2 features
+    containers_tab: EnhancedContainersTab,
+    /// The images tab (existing)
     images_tab: ImagesTab,
-    /// The volumes tab
+    /// The volumes tab (existing)
     volumes_tab: VolumesTab,
-    /// The networks tab
+    /// The networks tab (existing)
     networks_tab: NetworksTab,
-    /// The cheatsheet modal
+    /// The cheatsheet modal (existing)
     cheatsheet: CheatSheet,
+    /// Status message to display globally
+    global_status: Option<String>,
 }
 
 /// Available tabs in the application
@@ -95,11 +106,15 @@ impl TabType {
 }
 
 impl App {
-    /// Create a new application instance
+    /// Create a new enhanced application instance
     pub async fn new(docker_host: &str) -> Result<Self> {
         let docker_client = DockerClient::new(docker_host).await?;
         let event_handler = EventHandler::new(EventConfig::default());
-        let containers_tab = ContainersTab::new(docker_client.clone()).await?;
+
+        // Create the enhanced containers tab
+        let containers_tab = EnhancedContainersTab::new(docker_client.clone()).await?;
+
+        // Create other tabs (existing implementation)
         let images_tab = ImagesTab::new(docker_client.clone()).await?;
         let volumes_tab = VolumesTab::new(docker_client.clone()).await?;
         let networks_tab = NetworksTab::new(docker_client.clone()).await?;
@@ -111,11 +126,13 @@ impl App {
             current_tab: TabType::Containers,
             should_quit: false,
             show_cheatsheet: false,
+            in_container_subview: false,
             containers_tab,
             images_tab,
             volumes_tab,
             networks_tab,
             cheatsheet,
+            global_status: None,
         })
     }
 
@@ -126,6 +143,9 @@ impl App {
         stdout().execute(EnterAlternateScreen)?;
         let backend = CrosstermBackend::new(stdout());
         let mut terminal = Terminal::new(backend)?;
+
+        // Show welcome message
+        self.global_status = Some("🦆 Welcome to Docsee! New features: Real-time logs, Shell access, Stats monitoring, Advanced search".to_string());
 
         // Main application loop
         let result = self.main_loop(&mut terminal).await;
@@ -171,6 +191,11 @@ impl App {
     async fn handle_key_event(&mut self, key: crate::events::Key) -> Result<()> {
         use crate::events::Key;
 
+        // Clear any global status after user interaction
+        if self.global_status.is_some() {
+            self.global_status = None;
+        }
+
         // If cheatsheet is open, only handle escape to close it
         if self.show_cheatsheet {
             if key == Key::Esc {
@@ -179,36 +204,62 @@ impl App {
             return Ok(());
         }
 
-        // Global key handlers
-        match key {
-            Key::Quit => {
-                self.should_quit = true;
-            }
-            Key::Cheatsheet => {
-                self.show_cheatsheet = true;
-            }
-            Key::Left => {
-                self.current_tab = self.current_tab.previous();
-            }
-            Key::Right => {
-                self.current_tab = self.current_tab.next();
-            }
-            _ => {
-                // Pass key to current tab
-                match self.current_tab {
-                    TabType::Containers => {
-                        self.containers_tab.handle_key(key).await?;
-                    }
-                    TabType::Images => {
-                        self.images_tab.handle_key(key).await?;
-                    }
-                    TabType::Volumes => {
-                        self.volumes_tab.handle_key(key).await?;
-                    }
-                    TabType::Networks => {
-                        self.networks_tab.handle_key(key).await?;
-                    }
+        // Check if we're in a container sub-view (logs, shell, stats)
+        self.in_container_subview = self.current_tab == TabType::Containers &&
+                                    self.containers_tab.is_in_subview();
+
+        // Handle global keys first (unless in sub-view)
+        if !self.in_container_subview {
+            match key {
+                Key::Quit => {
+                    self.should_quit = true;
+                    return Ok(());
                 }
+                Key::Cheatsheet => {
+                    self.show_cheatsheet = true;
+                    return Ok(());
+                }
+                Key::Left => {
+                    self.current_tab = self.current_tab.previous();
+                    return Ok(());
+                }
+                Key::Right => {
+                    self.current_tab = self.current_tab.next();
+                    return Ok(());
+                }
+                _ => {}
+            }
+        } else {
+            // In sub-view, allow some global keys
+            match key {
+                Key::Quit => {
+                    // Force exit sub-view first, then quit
+                    self.containers_tab.force_exit_subview().await?;
+                    self.should_quit = true;
+                    return Ok(());
+                }
+                Key::Cheatsheet => {
+                    self.show_cheatsheet = true;
+                    return Ok(());
+                }
+                // Tab navigation is disabled in sub-views for safety
+                _ => {}
+            }
+        }
+
+        // Pass key to current tab
+        match self.current_tab {
+            TabType::Containers => {
+                self.containers_tab.handle_key(key).await?;
+            }
+            TabType::Images => {
+                self.images_tab.handle_key(key).await?;
+            }
+            TabType::Volumes => {
+                self.volumes_tab.handle_key(key).await?;
+            }
+            TabType::Networks => {
+                self.networks_tab.handle_key(key).await?;
             }
         }
 
@@ -240,41 +291,90 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let size = frame.area();
 
-        // Create main layout: tabs at top, content below
+        // Create main layout: header, tabs, content, footer
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
+                Constraint::Length(3), // Header with title and status
                 Constraint::Length(3), // Tab bar
                 Constraint::Min(0),    // Content area
+                Constraint::Length(1), // Footer
             ])
             .split(size);
 
+        // Draw header
+        self.draw_header(frame, chunks[0]);
+
         // Draw tab bar
-        self.draw_tabs(frame, chunks[0]);
+        self.draw_tabs(frame, chunks[1]);
 
         // Draw content based on current tab
         if self.show_cheatsheet {
-            self.cheatsheet.draw(frame, chunks[1]);
+            self.cheatsheet.draw(frame, chunks[2]);
         } else {
             match self.current_tab {
                 TabType::Containers => {
-                    self.containers_tab.draw(frame, chunks[1]);
+                    self.containers_tab.draw(frame, chunks[2]);
                 }
                 TabType::Images => {
-                    self.images_tab.draw(frame, chunks[1]);
+                    self.images_tab.draw(frame, chunks[2]);
                 }
                 TabType::Volumes => {
-                    self.volumes_tab.draw(frame, chunks[1]);
+                    self.volumes_tab.draw(frame, chunks[2]);
                 }
                 TabType::Networks => {
-                    self.networks_tab.draw(frame, chunks[1]);
+                    self.networks_tab.draw(frame, chunks[2]);
                 }
             }
         }
+
+        // Draw footer
+        self.draw_footer(frame, chunks[3]);
+    }
+
+    /// Draw the header with title and status
+    fn draw_header(&mut self, frame: &mut Frame, area: Rect) {
+        let status_text = if let Some(ref global_status) = self.global_status {
+            global_status.clone()
+        } else {
+            match self.current_tab {
+                TabType::Containers => {
+                    self.containers_tab.get_status().unwrap_or_else(|| "Ready".to_string())
+                }
+                _ => "Ready".to_string(),
+            }
+        };
+
+        let header_text = if self.in_container_subview {
+            // Show current sub-view in header
+            format!("🦆 Docsee - {} | {}",
+                   self.containers_tab.get_view_mode().name(),
+                   status_text)
+        } else {
+            format!("🦆 Docsee - Docker Management | {}", status_text)
+        };
+
+        let header = Paragraph::new(header_text)
+            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            .block(Block::default().borders(Borders::ALL));
+
+        frame.render_widget(header, area);
     }
 
     /// Draw the tab bar at the top
     fn draw_tabs(&self, frame: &mut Frame, area: Rect) {
+        // Don't show tabs in sub-views to avoid confusion
+        if self.in_container_subview {
+            let sub_view_info = Paragraph::new(
+                "📍 Sub-view active - Press Esc to return to main view, or use global shortcuts"
+            )
+            .style(Style::default().fg(Color::Yellow))
+            .block(Block::default().borders(Borders::ALL));
+
+            frame.render_widget(sub_view_info, area);
+            return;
+        }
+
         let tab_names: Vec<&str> = TabType::all().iter().map(|tab| tab.name()).collect();
         let current_index = TabType::all()
             .iter()
@@ -282,7 +382,7 @@ impl App {
             .unwrap_or(0);
 
         let tabs = Tabs::new(tab_names)
-            .block(Block::default().borders(Borders::ALL).title("Docsee - Docker Manager"))
+            .block(Block::default().borders(Borders::ALL).title("Navigation"))
             .style(Style::default().fg(Color::White))
             .highlight_style(
                 Style::default()
@@ -293,25 +393,27 @@ impl App {
 
         frame.render_widget(tabs, area);
     }
+
+    /// Draw the footer with help information
+    fn draw_footer(&self, frame: &mut Frame, area: Rect) {
+        let footer_text = if self.in_container_subview {
+            // Show sub-view specific help
+            match self.containers_tab.get_view_mode() {
+                ContainerViewMode::Logs => "Logs: ↑/↓ scroll | f follow | t timestamps | c clear | Esc back",
+                ContainerViewMode::Shell => "Shell: Type commands | ↑/↓ history | Tab switch shell | Esc back",
+                ContainerViewMode::Stats => "Stats: ←/→ switch view | r reset | p pause | +/- interval | Esc back",
+                _ => "Container sub-view - Press Esc to return",
+            }
+        } else if self.show_cheatsheet {
+            "Cheatsheet: Press Esc to close"
+        } else {
+            "Global: q quit | c help | ←/→ tabs | Container: l logs | e shell | s stats | / search"
+        };
+
+        let footer = Paragraph::new(footer_text)
+            .style(Style::default().fg(Color::Gray))
+            .alignment(ratatui::layout::Alignment::Center);
+
+        frame.render_widget(footer, area);
+    }
 }
-
-/*
-EXPLANATION:
-- App is the main application struct that coordinates everything
-- TabType enum defines our four tabs with navigation methods
-- new() creates the app, initializes Docker client and UI components
-- run() sets up the terminal and starts the main loop
-- main_loop() is the core event loop that draws UI and handles events
-- handle_key_event() processes keyboard input:
-  - Global keys (q, c, arrows) are handled first
-  - Tab-specific keys are passed to the current tab
-- handle_tick() refreshes data periodically
-- draw() renders the entire UI using Ratatui
-- draw_tabs() creates the tab bar at the top
-- Terminal setup/cleanup ensures proper restoration when the app exits
-- All four tabs (Containers, Images, Volumes, Networks) are now fully implemented
-
-FIXES APPLIED:
-- Removed unused imports: Line, Span, Paragraph
-- Kept only the necessary imports for the current functionality
-*/

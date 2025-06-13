@@ -251,6 +251,49 @@ impl From<event::KeyEvent> for Key {
                 ..
             } => Key::Prune,
 
+            // Phase 2 additional key mappings
+            event::KeyEvent {
+                code: event::KeyCode::Char('s'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('s'), // Stats view
+            
+            event::KeyEvent {
+                code: event::KeyCode::Char('i'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('i'), // Interactive shell
+            
+            event::KeyEvent {
+                code: event::KeyCode::Char('/'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('/'), // Search
+            
+            event::KeyEvent {
+                code: event::KeyCode::Char('f'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('f'), // Filter or Follow
+            
+            event::KeyEvent {
+                code: event::KeyCode::Char('t'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('t'), // Timestamps
+            
+            event::KeyEvent {
+                code: event::KeyCode::Char('+'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('+'), // Increase interval
+            
+            event::KeyEvent {
+                code: event::KeyCode::Char('-'),
+                modifiers: event::KeyModifiers::NONE,
+                ..
+            } => Key::Char('-'), // Decrease interval
+
             // First check for char + modifier
             event::KeyEvent {
                 code: event::KeyCode::Char(c),
