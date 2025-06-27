@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+# Pre-commit hook for docsee-tui
+# This script runs before each commit to ensure code quality
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+# Check if cargo is available
+if ! command -v cargo &> /dev/null; then
+    echo "❌ Cargo not found. Please install Rust toolchain."
+    exit 1
+fi
+
+# Format check
+echo "📝 Checking code formatting..."
+if ! cargo fmt --all -- --check; then
+    echo "❌ Code formatting issues found."
+    echo "💡 Run 'cargo fmt' to fix formatting."
+    exit 1
+fi
+
+# Clippy check
+echo "📎 Running clippy..."
+if ! cargo clippy --all-targets --all-features -- -D warnings; then
+    echo "❌ Clippy warnings found."
+    echo "💡 Fix the warnings above before committing."
+    exit 1
+fi
+
+# Test check
+echo "🧪 Running tests..."
+if ! cargo test; then
+    echo "❌ Tests failed."
+    echo "💡 Fix the failing tests before committing."
+    exit 1
+fi
+
+# Security audit
+echo "🔒 Running security audit..."
+if command -v cargo-audit &> /dev/null; then
+    if ! cargo audit; then
+        echo "⚠️ Security vulnerabilities found."
+        echo "💡 Update dependencies or check advisories."
+        # Don't exit here, just warn
+    fi
+else
+    echo "💡 Install cargo-audit for security checks: cargo install cargo-audit"
+fi
+
+echo "✅ All pre-commit checks passed!"

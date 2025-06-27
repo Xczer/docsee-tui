@@ -1,0 +1,16 @@
+# Cargo configuration for cross-compilation
+# This file helps with local cross-compilation testing
+
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+
+[target.x86_64-pc-windows-msvc]
+# Windows target (when building from Linux, would need mingw)
+
+[build]
+# Uncomment to set a default target
+# target = "x86_64-unknown-linux-gnu"
+
+# Enable more verbose linker output for debugging
+# [target.'cfg(all())']
+# rustflags = ["-C", "link-arg=-v"]
