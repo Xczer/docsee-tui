@@ -20,9 +20,11 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Create and run the application
-    let mut app = App::new(&cli.docker_host).await
+    let mut app = App::new(&cli.docker_host)
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to create app: {}", e))?;
-    app.run().await
+    app.run()
+        .await
         .map_err(|e| color_eyre::eyre::eyre!("Failed to run app: {}", e))?;
 
     Ok(())

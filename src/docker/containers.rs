@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use bollard::{
     container::{
-        ListContainersOptions, RemoveContainerOptions,
-        RestartContainerOptions, StartContainerOptions, StopContainerOptions,
+        ListContainersOptions, RemoveContainerOptions, RestartContainerOptions,
+        StartContainerOptions, StopContainerOptions,
     },
     models::ContainerSummary,
     service::ContainerInspectResponse,
@@ -160,17 +160,17 @@ impl DockerClient {
         let ports = if let Some(port_list) = container.ports {
             port_list
                 .iter()
-                .filter_map(|port| {
+                .map(|port| {
                     let private_port = port.private_port;
                     let public_port = port.public_port.map(|p| p.to_string()).unwrap_or_default();
                     let ip = port.ip.as_deref().unwrap_or("");
 
                     if public_port.is_empty() {
-                        Some(format!("{}", private_port))
+                        format!("{}", private_port)
                     } else if ip.is_empty() {
-                        Some(format!("{}:{}", public_port, private_port))
+                        format!("{}:{}", public_port, private_port)
                     } else {
-                        Some(format!("{}:{}:{}", ip, public_port, private_port))
+                        format!("{}:{}:{}", ip, public_port, private_port)
                     }
                 })
                 .collect::<Vec<_>>()

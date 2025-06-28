@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 /// Cheatsheet modal that shows all available commands
+#[derive(Default)]
 pub struct CheatSheet;
 
 impl CheatSheet {
@@ -33,7 +34,10 @@ impl CheatSheet {
         frame.render_widget(block, modal_area);
 
         // Create inner area for content
-        let inner_area = modal_area.inner(Margin { horizontal: 2, vertical: 1 });
+        let inner_area = modal_area.inner(Margin {
+            horizontal: 2,
+            vertical: 1,
+        });
 
         // Split into sections
         let sections = Layout::default()
@@ -59,21 +63,36 @@ impl CheatSheet {
     /// Draw global commands section
     fn draw_global_commands(&self, frame: &mut Frame, area: Rect) {
         let content = vec![
+            Line::from(vec![Span::styled(
+                "Global Commands",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(vec![
-                Span::styled("Global Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
-            Line::from(vec![
-                Span::styled("←/→", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "←/→",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Switch tabs  "),
-                Span::styled("c", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "c",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Show this cheatsheet  "),
-                Span::styled("q", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "q",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Quit application"),
             ]),
         ];
 
-        let paragraph = Paragraph::new(content)
-            .style(Style::default().fg(Color::White));
+        let paragraph = Paragraph::new(content).style(Style::default().fg(Color::White));
 
         frame.render_widget(paragraph, area);
     }
@@ -81,37 +100,77 @@ impl CheatSheet {
     /// Draw container commands section
     fn draw_container_commands(&self, frame: &mut Frame, area: Rect) {
         let content = vec![
-            Line::from(vec![
-                Span::styled("Container Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Container Commands",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "↑/↓",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Navigate containers"),
             ]),
             Line::from(vec![
-                Span::styled("u", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "u",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Start container     "),
-                Span::styled("d", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "d",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Stop container"),
             ]),
             Line::from(vec![
-                Span::styled("r", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "r",
+                    Style::default()
+                        .fg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Restart container   "),
-                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "D",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Delete container (if stopped)"),
             ]),
             Line::from(vec![
-                Span::styled("l", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "l",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   View logs           "),
-                Span::styled("e", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "e",
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Execute shell"),
-                Span::styled(" (coming soon)", Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC)),
+                Span::styled(
+                    " (coming soon)",
+                    Style::default()
+                        .fg(Color::Gray)
+                        .add_modifier(Modifier::ITALIC),
+                ),
             ]),
         ];
 
-        let paragraph = Paragraph::new(content)
-            .style(Style::default().fg(Color::White));
+        let paragraph = Paragraph::new(content).style(Style::default().fg(Color::White));
 
         frame.render_widget(paragraph, area);
     }
@@ -119,24 +178,39 @@ impl CheatSheet {
     /// Draw images commands section
     fn draw_images_commands(&self, frame: &mut Frame, area: Rect) {
         let content = vec![
-            Line::from(vec![
-                Span::styled("Images Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Images Commands",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "↑/↓",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Navigate images"),
             ]),
             Line::from(vec![
-                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "D",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Delete image        "),
-                Span::styled("p", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "p",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Prune unused images"),
             ]),
         ];
 
-        let paragraph = Paragraph::new(content)
-            .style(Style::default().fg(Color::White));
+        let paragraph = Paragraph::new(content).style(Style::default().fg(Color::White));
 
         frame.render_widget(paragraph, area);
     }
@@ -144,24 +218,39 @@ impl CheatSheet {
     /// Draw volumes commands section
     fn draw_volumes_commands(&self, frame: &mut Frame, area: Rect) {
         let content = vec![
-            Line::from(vec![
-                Span::styled("Volumes Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Volumes Commands",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "↑/↓",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Navigate volumes     "),
-                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "D",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Delete volume"),
             ]),
             Line::from(vec![
-                Span::styled("p", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "p",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Prune unused volumes"),
             ]),
         ];
 
-        let paragraph = Paragraph::new(content)
-            .style(Style::default().fg(Color::White));
+        let paragraph = Paragraph::new(content).style(Style::default().fg(Color::White));
 
         frame.render_widget(paragraph, area);
     }
@@ -169,24 +258,39 @@ impl CheatSheet {
     /// Draw networks commands section
     fn draw_networks_commands(&self, frame: &mut Frame, area: Rect) {
         let content = vec![
-            Line::from(vec![
-                Span::styled("Networks Commands", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                "Networks Commands",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "↑/↓",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("  Navigate networks    "),
-                Span::styled("D", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "D",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Delete network"),
             ]),
             Line::from(vec![
-                Span::styled("p", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "p",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw("   Prune unused networks"),
             ]),
         ];
 
-        let paragraph = Paragraph::new(content)
-            .style(Style::default().fg(Color::White));
+        let paragraph = Paragraph::new(content).style(Style::default().fg(Color::White));
 
         frame.render_widget(paragraph, area);
     }

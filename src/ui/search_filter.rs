@@ -61,7 +61,7 @@ impl SearchMode {
     pub fn name(&self) -> &'static str {
         match self {
             SearchMode::Name => "Name",
-            SearchMode::Image => "Image", 
+            SearchMode::Image => "Image",
             SearchMode::Status => "Status",
             SearchMode::All => "All Fields",
         }
@@ -185,13 +185,15 @@ impl SearchInput {
     /// Draw the search input
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         let style = if self.active {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::Gray)
         };
 
         let mut input_text = self.query.clone();
-        
+
         // Add cursor if active
         if self.active {
             if self.cursor_position < input_text.len() {
@@ -202,9 +204,15 @@ impl SearchInput {
         }
 
         let title = if self.active {
-            format!("🔍 Search {} (Tab to switch, Enter to apply, Esc to cancel)", self.search_mode.name())
+            format!(
+                "🔍 Search {} (Tab to switch, Enter to apply, Esc to cancel)",
+                self.search_mode.name()
+            )
         } else {
-            format!("🔍 Search {} (Press / to activate)", self.search_mode.name())
+            format!(
+                "🔍 Search {} (Press / to activate)",
+                self.search_mode.name()
+            )
         };
 
         let search_widget = Paragraph::new(input_text)
@@ -236,11 +244,7 @@ impl Default for FilterManager {
 impl FilterManager {
     /// Create a new filter manager
     pub fn new() -> Self {
-        let quick_filters = vec![
-            FilterMode::All,
-            FilterMode::Running,
-            FilterMode::Stopped,
-        ];
+        let quick_filters = vec![FilterMode::All, FilterMode::Running, FilterMode::Stopped];
 
         Self {
             current_filter: FilterMode::All,
@@ -390,7 +394,7 @@ impl FilterManager {
     /// Draw filter information and shortcuts
     fn draw_filter_info(&self, frame: &mut Frame, area: Rect) {
         let filter_text = format!("Active Filter: {}", self.get_filter_description());
-        
+
         let filter_info = Paragraph::new(vec![
             Line::from(vec![
                 Span::styled("Current: ", Style::default().add_modifier(Modifier::BOLD)),
@@ -421,10 +425,7 @@ impl FilterManager {
         let mut suggestions = Vec::new();
 
         // Get unique images
-        let mut images: Vec<String> = containers
-            .iter()
-            .map(|c| c.image.clone())
-            .collect();
+        let mut images: Vec<String> = containers.iter().map(|c| c.image.clone()).collect();
         images.sort();
         images.dedup();
 
@@ -454,6 +455,7 @@ pub struct AdvancedSearch {
     /// Filter manager
     filter_manager: FilterManager,
     /// Search history
+    #[allow(dead_code)]
     search_history: Vec<String>,
     /// Current suggestions
     suggestions: Vec<String>,
@@ -518,7 +520,7 @@ impl AdvancedSearch {
 
         // Handle filter manager events
         let handled = self.filter_manager.handle_key(key);
-        
+
         // Update suggestions when search becomes active
         if self.filter_manager.is_search_active() {
             self.show_suggestions = true;
@@ -602,12 +604,15 @@ impl AdvancedSearch {
 
     /// Draw suggestions list
     fn draw_suggestions(&mut self, frame: &mut Frame, area: Rect) {
-        let items: Vec<ListItem> = self.suggestions
+        let items: Vec<ListItem> = self
+            .suggestions
             .iter()
             .enumerate()
             .map(|(i, suggestion)| {
                 let style = if Some(i) == self.suggestion_index {
-                    Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .bg(Color::DarkGray)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default()
                 };
@@ -616,8 +621,11 @@ impl AdvancedSearch {
             })
             .collect();
 
-        let suggestions_list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Suggestions (↑/↓ to navigate, Enter to select)"));
+        let suggestions_list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Suggestions (↑/↓ to navigate, Enter to select)"),
+        );
 
         frame.render_widget(suggestions_list, area);
     }

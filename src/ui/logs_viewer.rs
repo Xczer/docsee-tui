@@ -3,7 +3,10 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, Wrap,
+    },
     Frame,
 };
 use std::collections::VecDeque;
@@ -94,6 +97,7 @@ struct DisplayLine {
     content: String,
     stream: LogStream,
     timestamp: String,
+    #[allow(dead_code)]
     original_index: usize,
     line_part: usize, // For wrapped lines: 0 = first part, 1+ = continuation
 }
@@ -174,7 +178,7 @@ impl LogsViewer {
                 entries_to_add.push(entry);
             }
         }
-        
+
         // Add entries and rebuild display
         let mut needs_rebuild = false;
         for entry in entries_to_add {
@@ -207,7 +211,8 @@ impl LogsViewer {
             Key::Char('-') => self.decrease_scroll_speed(),
             Key::Char('/') => {
                 // TODO: Implement search
-                self.status_message = Some("Search: Type to filter logs (coming soon!)".to_string());
+                self.status_message =
+                    Some("Search: Type to filter logs (coming soon!)".to_string());
             }
             Key::Char('r') => self.refresh_display(),
             _ => {}
@@ -242,29 +247,40 @@ impl LogsViewer {
             .map(|c| c.name.as_str())
             .unwrap_or("No Container");
 
-        let status = if self.following { "🔄 Following" } else { "⏸️  Paused" };
-        let timestamp_status = if self.show_timestamps { "🕐 With Timestamps" } else { "⏰ No Timestamps" };
-        let wrap_status = if self.word_wrap { "↩️  Word Wrap" } else { "➡️ No Wrap" };
-        let line_num_status = if self.show_line_numbers { "🔢 Line Numbers" } else { "📄 No Numbers" };
-        
+        let status = if self.following {
+            "🔄 Following"
+        } else {
+            "⏸️  Paused"
+        };
+        let timestamp_status = if self.show_timestamps {
+            "🕐 With Timestamps"
+        } else {
+            "⏰ No Timestamps"
+        };
+        let wrap_status = if self.word_wrap {
+            "↩️  Word Wrap"
+        } else {
+            "➡️ No Wrap"
+        };
+        let line_num_status = if self.show_line_numbers {
+            "🔢 Line Numbers"
+        } else {
+            "📄 No Numbers"
+        };
+
         let title = format!(
             "📋 Logs: {} | {} | {} | {} | {}",
-            container_name,
-            status,
-            timestamp_status,
-            wrap_status,
-            line_num_status
+            container_name, status, timestamp_status, wrap_status, line_num_status
         );
 
         let stats = format!(
             "Total: {} lines | Displayed: {} lines | Speed: {}x",
-            self.total_lines,
-            self.filtered_lines,
-            self.auto_scroll_speed
+            self.total_lines, self.filtered_lines, self.auto_scroll_speed
         );
 
         let controls1 = "Navigation: ↑/↓ Scroll | PgUp/PgDn Page | Home/End Jump";
-        let controls2 = "Features: f Follow | t Timestamps | w WordWrap | n LineNumbers | c Clear | +/- Speed";
+        let controls2 =
+            "Features: f Follow | t Timestamps | w WordWrap | n LineNumbers | c Clear | +/- Speed";
         let controls3 = "Other: r Refresh | / Search | Esc Back";
 
         let title_text = if let Some(ref message) = self.status_message {
@@ -274,9 +290,12 @@ impl LogsViewer {
         };
 
         let header = Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled(title_text, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                title_text,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(vec![
                 Span::styled("📊 ", Style::default().fg(Color::Yellow)),
                 Span::raw(stats),
@@ -285,16 +304,14 @@ impl LogsViewer {
                 Span::styled("🎮 ", Style::default().fg(Color::Green)),
                 Span::raw(controls1),
             ]),
-            Line::from(vec![
-                Span::raw("   "),
-                Span::raw(controls2),
-            ]),
-            Line::from(vec![
-                Span::raw("   "),
-                Span::raw(controls3),
-            ]),
+            Line::from(vec![Span::raw("   "), Span::raw(controls2)]),
+            Line::from(vec![Span::raw("   "), Span::raw(controls3)]),
         ])
-        .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Blue)))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Blue)),
+        )
         .wrap(Wrap { trim: true });
 
         frame.render_widget(header, area);
@@ -357,10 +374,7 @@ impl LogsViewer {
 
                 // Add continuation indicator for wrapped lines
                 if line.line_part > 0 {
-                    spans.push(Span::styled(
-                        "↳ ",
-                        Style::default().fg(Color::DarkGray),
-                    ));
+                    spans.push(Span::styled("↳ ", Style::default().fg(Color::DarkGray)));
                 }
 
                 // Add main content
@@ -376,7 +390,11 @@ impl LogsViewer {
         let logs_title = format!(
             "Log Output ({} lines{})",
             filtered_lines.len(),
-            if self.search_filter.is_some() { " filtered" } else { "" }
+            if self.search_filter.is_some() {
+                " filtered"
+            } else {
+                ""
+            }
         );
 
         let logs_list = List::new(items)
@@ -384,12 +402,12 @@ impl LogsViewer {
                 Block::default()
                     .borders(Borders::ALL)
                     .title(logs_title)
-                    .border_style(Style::default().fg(Color::Gray))
+                    .border_style(Style::default().fg(Color::Gray)),
             )
             .highlight_style(
                 Style::default()
                     .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD)
+                    .add_modifier(Modifier::BOLD),
             );
 
         // Auto-scroll to bottom if following
@@ -399,13 +417,14 @@ impl LogsViewer {
         }
 
         // Update scrollbar state
-        self.vertical_scrollbar_state = self.vertical_scrollbar_state
+        self.vertical_scrollbar_state = self
+            .vertical_scrollbar_state
             .content_length(filtered_lines.len())
             .position(self.list_state.selected().unwrap_or(0));
 
         // Render list and scrollbar
         frame.render_stateful_widget(logs_list, logs_area, &mut self.list_state);
-        
+
         if filtered_lines.len() > area.height as usize {
             frame.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -449,22 +468,22 @@ impl LogsViewer {
 
         for word in text.split_whitespace() {
             let word_len = word.len();
-            
+
             if current_width + word_len + 1 > width && !current_line.is_empty() {
                 lines.push(current_line.clone());
                 current_line.clear();
                 current_width = 0;
             }
-            
+
             if !current_line.is_empty() {
                 current_line.push(' ');
                 current_width += 1;
             }
-            
+
             current_line.push_str(word);
             current_width += word_len;
         }
-        
+
         if !current_line.is_empty() {
             lines.push(current_line);
         }
@@ -472,7 +491,7 @@ impl LogsViewer {
         if lines.is_empty() {
             lines.push(String::new());
         }
-        
+
         lines
     }
 
@@ -550,7 +569,8 @@ impl LogsViewer {
     /// Scroll to bottom
     fn scroll_to_bottom(&mut self) {
         if !self.display_lines.is_empty() {
-            self.list_state.select(Some(self.display_lines.len().saturating_sub(1)));
+            self.list_state
+                .select(Some(self.display_lines.len().saturating_sub(1)));
             self.following = true;
         }
     }
@@ -559,16 +579,25 @@ impl LogsViewer {
     fn toggle_follow(&mut self) {
         self.following = !self.following;
         if self.following && !self.display_lines.is_empty() {
-            self.list_state.select(Some(self.display_lines.len().saturating_sub(1)));
+            self.list_state
+                .select(Some(self.display_lines.len().saturating_sub(1)));
         }
-        let status = if self.following { "Following enabled" } else { "Following disabled" };
+        let status = if self.following {
+            "Following enabled"
+        } else {
+            "Following disabled"
+        };
         self.status_message = Some(status.to_string());
     }
 
     /// Toggle timestamp display
     fn toggle_timestamps(&mut self) {
         self.show_timestamps = !self.show_timestamps;
-        let status = if self.show_timestamps { "Timestamps enabled" } else { "Timestamps disabled" };
+        let status = if self.show_timestamps {
+            "Timestamps enabled"
+        } else {
+            "Timestamps disabled"
+        };
         self.status_message = Some(status.to_string());
     }
 
@@ -582,15 +611,23 @@ impl LogsViewer {
             self.add_log_entry(entry);
         }
         self.rebuild_display();
-        
-        let status = if self.word_wrap { "Word wrap enabled" } else { "Word wrap disabled" };
+
+        let status = if self.word_wrap {
+            "Word wrap enabled"
+        } else {
+            "Word wrap disabled"
+        };
         self.status_message = Some(status.to_string());
     }
 
     /// Toggle line numbers
     fn toggle_line_numbers(&mut self) {
         self.show_line_numbers = !self.show_line_numbers;
-        let status = if self.show_line_numbers { "Line numbers enabled" } else { "Line numbers disabled" };
+        let status = if self.show_line_numbers {
+            "Line numbers enabled"
+        } else {
+            "Line numbers disabled"
+        };
         self.status_message = Some(status.to_string());
     }
 
@@ -658,7 +695,10 @@ impl LogsViewer {
                 let (ts, content) = content_str.split_at(pos);
                 (ts.to_string(), content.trim().to_string())
             } else {
-                (Local::now().format("%Y-%m-%d %H:%M:%S").to_string(), content_str.to_string())
+                (
+                    Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+                    content_str.to_string(),
+                )
             };
 
             let entry = LogEntry {

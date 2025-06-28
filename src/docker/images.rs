@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use bollard::{
-    image::{ListImagesOptions, RemoveImageOptions, PruneImagesOptions},
+    image::{ListImagesOptions, PruneImagesOptions, RemoveImageOptions},
     models::ImageSummary,
 };
 use byte_unit::{Byte, UnitType};
@@ -45,11 +45,9 @@ impl DockerClient {
         }
 
         // Sort by repository and tag for consistent display
-        result.sort_by(|a, b| {
-            match a.repository.cmp(&b.repository) {
-                std::cmp::Ordering::Equal => a.tag.cmp(&b.tag),
-                other => other,
-            }
+        result.sort_by(|a, b| match a.repository.cmp(&b.repository) {
+            std::cmp::Ordering::Equal => a.tag.cmp(&b.tag),
+            other => other,
         });
 
         Ok(result)
@@ -105,7 +103,8 @@ impl DockerClient {
 
         // Check if image is dangling (no repo tags)
         let repo_tags = image.repo_tags.clone();
-        let is_dangling = repo_tags.is_empty() || repo_tags.iter().all(|tag| tag == "<none>:<none>");
+        let is_dangling =
+            repo_tags.is_empty() || repo_tags.iter().all(|tag| tag == "<none>:<none>");
 
         if is_dangling {
             // Dangling image with no tags

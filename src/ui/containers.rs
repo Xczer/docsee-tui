@@ -13,9 +13,9 @@ use crate::{
 
 // Import our new Phase 2 components
 use crate::ui::logs_viewer::LogsViewer;
+use crate::ui::search_filter::AdvancedSearch;
 use crate::ui::shell_executor::ShellExecutor;
 use crate::ui::stats_viewer::StatsViewer;
-use crate::ui::search_filter::AdvancedSearch;
 
 /// Enhanced containers tab with Phase 2 features
 pub struct EnhancedContainersTab {
@@ -176,28 +176,24 @@ impl EnhancedContainersTab {
                     _ => {}
                 }
             }
-            ContainerViewMode::Logs => {
-                match key {
-                    Key::Esc => self.exit_to_list_view().await?,
-                    _ => {
-                        self.logs_viewer.handle_key(key).await?;
-                    }
+            ContainerViewMode::Logs => match key {
+                Key::Esc => self.exit_to_list_view().await?,
+                _ => {
+                    self.logs_viewer.handle_key(key).await?;
                 }
-            }
+            },
             ContainerViewMode::Shell => {
-                match self.shell_executor.handle_key(key).await? {
-                    true => self.exit_to_list_view().await?, // Exit requested
-                    false => {} // Continue in shell mode
+                if self.shell_executor.handle_key(key).await? {
+                    self.exit_to_list_view().await?; // Exit requested
                 }
+                // Continue in shell mode if false
             }
-            ContainerViewMode::Stats => {
-                match key {
-                    Key::Esc => self.exit_to_list_view().await?,
-                    _ => {
-                        self.stats_viewer.handle_key(key).await?;
-                    }
+            ContainerViewMode::Stats => match key {
+                Key::Esc => self.exit_to_list_view().await?,
+                _ => {
+                    self.stats_viewer.handle_key(key).await?;
                 }
-            }
+            },
         }
 
         Ok(())
@@ -219,7 +215,7 @@ impl EnhancedContainersTab {
                     // Keep other keys as they are
                     _ => key,
                 };
-                
+
                 match self.shell_executor.handle_key(shell_key).await? {
                     true => {
                         self.exit_to_list_view().await?;
@@ -313,7 +309,10 @@ impl EnhancedContainersTab {
 
         let filter_desc = self.search_filter.get_filter_description();
         let title_text = if total_count == filtered_count {
-            format!("Containers ({} total, {} running)", total_count, running_count)
+            format!(
+                "Containers ({} total, {} running)",
+                total_count, running_count
+            )
         } else {
             format!(
                 "Containers ({}/{} shown, {} running) - Filter: {}",
@@ -340,15 +339,11 @@ impl EnhancedContainersTab {
             ],
         )
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-        )
+        .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
 
@@ -408,7 +403,9 @@ impl EnhancedContainersTab {
     /// Start interactive shell (drops out of TUI temporarily)
     async fn start_interactive_shell(&mut self) -> Result<()> {
         if let Some(container) = self.get_selected_container() {
-            self.shell_executor.start_interactive_shell(container).await?;
+            self.shell_executor
+                .start_interactive_shell(container)
+                .await?;
         } else {
             self.status_message = Some("No container selected".to_string());
         }
@@ -531,7 +528,10 @@ impl EnhancedContainersTab {
 
             // For safety, only allow deletion of stopped containers
             if container.state == crate::docker::containers::ContainerState::Running {
-                self.status_message = Some(format!("Cannot delete running container '{}'. Stop it first.", name));
+                self.status_message = Some(format!(
+                    "Cannot delete running container '{}'. Stop it first.",
+                    name
+                ));
                 return Ok(());
             }
 

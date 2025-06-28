@@ -5,10 +5,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect, Alignment},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Paragraph},
     text::{Line, Span},
+    widgets::{Block, Borders, Paragraph},
     Frame, Terminal,
 };
 use std::io::{self, stdout};
@@ -16,20 +16,16 @@ use std::io::{self, stdout};
 use crate::{
     docker::DockerClient,
     events::{AppEvent, EventConfig, EventHandler},
-    ui::{
-        cheatsheet::CheatSheet,
-        images::ImagesTab,
-        networks::NetworksTab,
-        volumes::VolumesTab,
-    },
+    ui::{cheatsheet::CheatSheet, images::ImagesTab, networks::NetworksTab, volumes::VolumesTab},
 };
 
 // Import our enhanced containers tab
-use crate::ui::containers::{EnhancedContainersTab, ContainerViewMode};
+use crate::ui::containers::{ContainerViewMode, EnhancedContainersTab};
 
 /// Enhanced application with better navigation and ASCII art
 pub struct App {
     /// Docker client for API operations
+    #[allow(dead_code)]
     docker_client: DockerClient,
     /// Event handler for terminal input
     event_handler: EventHandler,
@@ -169,7 +165,10 @@ impl App {
     }
 
     /// Main event loop
-    async fn main_loop(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+    async fn main_loop(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    ) -> Result<()> {
         loop {
             // Draw the UI
             terminal.draw(|frame| self.draw(frame))?;
@@ -216,13 +215,13 @@ impl App {
         }
 
         // Check if we're in a container sub-view (logs, shell, stats)
-        self.in_container_subview = self.current_tab == TabType::Containers &&
-                                    self.containers_tab.is_in_subview();
+        self.in_container_subview =
+            self.current_tab == TabType::Containers && self.containers_tab.is_in_subview();
 
         // Special handling for shell mode - intercept raw key events
-        if self.in_container_subview && 
-           self.containers_tab.get_view_mode() == &ContainerViewMode::Shell {
-            
+        if self.in_container_subview
+            && self.containers_tab.get_view_mode() == &ContainerViewMode::Shell
+        {
             // In shell mode, handle the key directly without converting to actions
             let shell_exit = self.containers_tab.handle_shell_key_raw(key).await?;
             if shell_exit {
@@ -362,7 +361,9 @@ impl App {
         let ascii_art = vec![
             Line::from(Span::styled(
                 "██████╗  ██████╗  ██████╗███████╗███████╗███████╗",
-                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(Span::styled(
                 "██╔══██╗██╔═══██╗██╔════╝██╔════╝██╔════╝██╔════╝",
@@ -386,13 +387,19 @@ impl App {
             )),
             Line::from(Span::styled(
                 "            🦆 Docker Management TUI v1.0",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::ITALIC),
             )),
         ];
 
         let title_paragraph = Paragraph::new(ascii_art)
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::DarkGray)),
+            );
 
         frame.render_widget(title_paragraph, area);
     }
@@ -405,10 +412,15 @@ impl App {
                 Span::styled("📍 ", Style::default().fg(Color::Yellow)),
                 Span::styled(
                     self.containers_tab.get_view_mode().name(),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" - Press "),
-                Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Esc",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" to return to main view"),
             ]);
 
@@ -445,22 +457,26 @@ impl App {
 
         // Draw current tab (center)
         let current_text = vec![
-            Line::from(vec![
-                Span::styled(
-                    self.current_tab.name(),
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                ),
-            ]),
-            Line::from(vec![
-                Span::styled(
-                    self.current_tab.info(),
-                    Style::default().fg(Color::White).add_modifier(Modifier::ITALIC),
-                ),
-            ]),
+            Line::from(vec![Span::styled(
+                self.current_tab.name(),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )]),
+            Line::from(vec![Span::styled(
+                self.current_tab.info(),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::ITALIC),
+            )]),
         ];
         let current_paragraph = Paragraph::new(current_text)
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow)));
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow)),
+            );
         frame.render_widget(current_paragraph, nav_chunks[1]);
 
         // Draw next tab (right)

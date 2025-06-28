@@ -1,18 +1,15 @@
 use anyhow::Result;
+use byte_unit::Byte;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
-    widgets::{
-        Axis, Block, Borders, Chart, Dataset, Gauge, List, ListItem,
-        Paragraph
-    },
+    widgets::{Axis, Block, Borders, Chart, Dataset, Gauge, List, ListItem, Paragraph},
     Frame,
 };
 use std::collections::VecDeque;
 use tokio::sync::mpsc;
-use byte_unit::Byte;
 
 use crate::{
     docker::{containers::Container, DockerClient},
@@ -57,6 +54,7 @@ impl Default for ContainerStats {
 /// Historical data point for charting
 #[derive(Debug, Clone)]
 struct DataPoint {
+    #[allow(dead_code)]
     timestamp: f64,
     value: f64,
 }
@@ -223,18 +221,24 @@ impl StatsViewer {
             Key::Char('+') => {
                 if self.update_interval > 1 {
                     self.update_interval -= 1;
-                    self.status_message = Some(format!("Update interval: {}s", self.update_interval));
+                    self.status_message =
+                        Some(format!("Update interval: {}s", self.update_interval));
                 }
             }
             Key::Char('-') => {
                 if self.update_interval < 10 {
                     self.update_interval += 1;
-                    self.status_message = Some(format!("Update interval: {}s", self.update_interval));
+                    self.status_message =
+                        Some(format!("Update interval: {}s", self.update_interval));
                 }
             }
             Key::Char('p') => {
                 self.is_streaming = !self.is_streaming;
-                let status = if self.is_streaming { "resumed" } else { "paused" };
+                let status = if self.is_streaming {
+                    "resumed"
+                } else {
+                    "paused"
+                };
                 self.status_message = Some(format!("Monitoring {}", status));
             }
             _ => {}
@@ -274,7 +278,11 @@ impl StatsViewer {
             .map(|c| c.name.as_str())
             .unwrap_or("No Container");
 
-        let status = if self.is_streaming { "🟢 Live" } else { "🔴 Paused" };
+        let status = if self.is_streaming {
+            "🟢 Live"
+        } else {
+            "🔴 Paused"
+        };
 
         let title = format!(
             "Stats: {} | {} | View: {} | Update: {}s",
@@ -376,17 +384,27 @@ impl StatsViewer {
             .split(chunks[1]);
 
         // Network RX
-        let rx_bytes = Byte::from_u64(self.current_stats.network_rx_bytes).get_appropriate_unit(byte_unit::UnitType::Decimal);
+        let rx_bytes = Byte::from_u64(self.current_stats.network_rx_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Decimal);
         let network_rx = Paragraph::new(format!("RX: {:.2}", rx_bytes))
-            .block(Block::default().borders(Borders::ALL).title("Network Received"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Network Received"),
+            )
             .style(Style::default().fg(Color::Cyan));
 
         frame.render_widget(network_rx, right_chunks[0]);
 
         // Network TX
-        let tx_bytes = Byte::from_u64(self.current_stats.network_tx_bytes).get_appropriate_unit(byte_unit::UnitType::Decimal);
+        let tx_bytes = Byte::from_u64(self.current_stats.network_tx_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Decimal);
         let network_tx = Paragraph::new(format!("TX: {:.2}", tx_bytes))
-            .block(Block::default().borders(Borders::ALL).title("Network Transmitted"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Network Transmitted"),
+            )
             .style(Style::default().fg(Color::Magenta));
 
         frame.render_widget(network_tx, right_chunks[1]);
@@ -394,10 +412,14 @@ impl StatsViewer {
 
     /// Draw details table
     fn draw_details_table(&mut self, frame: &mut Frame, area: Rect) {
-        let memory_used = Byte::from_u64(self.current_stats.memory_usage_bytes).get_appropriate_unit(byte_unit::UnitType::Binary);
-        let memory_limit = Byte::from_u64(self.current_stats.memory_limit_bytes).get_appropriate_unit(byte_unit::UnitType::Binary);
-        let block_read = Byte::from_u64(self.current_stats.block_read_bytes).get_appropriate_unit(byte_unit::UnitType::Decimal);
-        let block_write = Byte::from_u64(self.current_stats.block_write_bytes).get_appropriate_unit(byte_unit::UnitType::Decimal);
+        let memory_used = Byte::from_u64(self.current_stats.memory_usage_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Binary);
+        let memory_limit = Byte::from_u64(self.current_stats.memory_limit_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Binary);
+        let block_read = Byte::from_u64(self.current_stats.block_read_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Decimal);
+        let block_write = Byte::from_u64(self.current_stats.block_write_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Decimal);
 
         let info_text = format!(
             "CPU Usage: {:.2}%\nMemory Used: {:.2}\nMemory Limit: {:.2}\nMemory Percent: {:.2}%\nBlock Read: {:.2}\nBlock Write: {:.2}\nPIDs: {}",
@@ -410,8 +432,11 @@ impl StatsViewer {
             self.current_stats.pids
         );
 
-        let details = Paragraph::new(info_text)
-            .block(Block::default().borders(Borders::ALL).title("Resource Details"));
+        let details = Paragraph::new(info_text).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Resource Details"),
+        );
 
         frame.render_widget(details, area);
     }
@@ -436,13 +461,17 @@ impl StatsViewer {
     /// Draw CPU usage chart
     fn draw_cpu_chart(&mut self, frame: &mut Frame, area: Rect) {
         if self.cpu_history.is_empty() {
-            let placeholder = Paragraph::new("No CPU data available yet...")
-                .block(Block::default().borders(Borders::ALL).title("CPU Usage Over Time"));
+            let placeholder = Paragraph::new("No CPU data available yet...").block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("CPU Usage Over Time"),
+            );
             frame.render_widget(placeholder, area);
             return;
         }
 
-        let data: Vec<(f64, f64)> = self.cpu_history
+        let data: Vec<(f64, f64)> = self
+            .cpu_history
             .iter()
             .enumerate()
             .map(|(i, point)| (i as f64, point.value))
@@ -457,17 +486,17 @@ impl StatsViewer {
             .data(&data);
 
         let chart = Chart::new(vec![dataset])
-            .block(Block::default().borders(Borders::ALL).title("CPU Usage Over Time"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("CPU Usage Over Time"),
+            )
             .x_axis(
                 Axis::default()
                     .title("Time")
-                    .bounds([0.0, MAX_CHART_POINTS as f64])
+                    .bounds([0.0, MAX_CHART_POINTS as f64]),
             )
-            .y_axis(
-                Axis::default()
-                    .title("CPU %")
-                    .bounds([0.0, max_cpu])
-            );
+            .y_axis(Axis::default().title("CPU %").bounds([0.0, max_cpu]));
 
         frame.render_widget(chart, area);
     }
@@ -475,13 +504,17 @@ impl StatsViewer {
     /// Draw memory usage chart
     fn draw_memory_chart(&mut self, frame: &mut Frame, area: Rect) {
         if self.memory_history.is_empty() {
-            let placeholder = Paragraph::new("No memory data available yet...")
-                .block(Block::default().borders(Borders::ALL).title("Memory Usage Over Time"));
+            let placeholder = Paragraph::new("No memory data available yet...").block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Memory Usage Over Time"),
+            );
             frame.render_widget(placeholder, area);
             return;
         }
 
-        let data: Vec<(f64, f64)> = self.memory_history
+        let data: Vec<(f64, f64)> = self
+            .memory_history
             .iter()
             .enumerate()
             .map(|(i, point)| (i as f64, point.value))
@@ -496,46 +529,66 @@ impl StatsViewer {
             .data(&data);
 
         let chart = Chart::new(vec![dataset])
-            .block(Block::default().borders(Borders::ALL).title("Memory Usage Over Time"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Memory Usage Over Time"),
+            )
             .x_axis(
                 Axis::default()
                     .title("Time")
-                    .bounds([0.0, MAX_CHART_POINTS as f64])
+                    .bounds([0.0, MAX_CHART_POINTS as f64]),
             )
-            .y_axis(
-                Axis::default()
-                    .title("Memory %")
-                    .bounds([0.0, max_memory])
-            );
+            .y_axis(Axis::default().title("Memory %").bounds([0.0, max_memory]));
 
         frame.render_widget(chart, area);
     }
 
     /// Draw network mode
     fn draw_network(&mut self, frame: &mut Frame, area: Rect) {
-        let rx_bytes = Byte::from_u64(self.current_stats.network_rx_bytes).get_appropriate_unit(byte_unit::UnitType::Decimal);
-        let tx_bytes = Byte::from_u64(self.current_stats.network_tx_bytes).get_appropriate_unit(byte_unit::UnitType::Decimal);
+        let rx_bytes = Byte::from_u64(self.current_stats.network_rx_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Decimal);
+        let tx_bytes = Byte::from_u64(self.current_stats.network_tx_bytes)
+            .get_appropriate_unit(byte_unit::UnitType::Decimal);
 
         let items = vec![
             ListItem::new(Line::from(vec![
-                Span::styled("Network RX: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Network RX: ",
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(format!("{:.2}", rx_bytes), Style::default().fg(Color::Cyan)),
             ])),
             ListItem::new(Line::from(vec![
-                Span::styled("Network TX: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::styled(format!("{:.2}", tx_bytes), Style::default().fg(Color::Magenta)),
+                Span::styled(
+                    "Network TX: ",
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("{:.2}", tx_bytes),
+                    Style::default().fg(Color::Magenta),
+                ),
             ])),
             ListItem::new(Line::from(vec![
-                Span::styled("Total Transfer: ", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(format!("{:.2}",
-                    Byte::from_u64(self.current_stats.network_rx_bytes + self.current_stats.network_tx_bytes)
-                        .get_appropriate_unit(byte_unit::UnitType::Decimal)
+                Span::styled(
+                    "Total Transfer: ",
+                    Style::default().add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(format!(
+                    "{:.2}",
+                    Byte::from_u64(
+                        self.current_stats.network_rx_bytes + self.current_stats.network_tx_bytes
+                    )
+                    .get_appropriate_unit(byte_unit::UnitType::Decimal)
                 )),
             ])),
         ];
 
-        let list = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title("Network Summary"));
+        let list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Network Summary"),
+        );
 
         frame.render_widget(list, area);
     }
@@ -547,16 +600,19 @@ impl StatsViewer {
                 Span::styled("PIDs: ", Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw(self.current_stats.pids.to_string()),
             ])),
-            ListItem::new(Line::from(vec![
-                Span::raw("Process listing requires additional Docker permissions."),
-            ])),
-            ListItem::new(Line::from(vec![
-                Span::raw("Use 'docker exec -it <container> ps aux' for detailed process info."),
-            ])),
+            ListItem::new(Line::from(vec![Span::raw(
+                "Process listing requires additional Docker permissions.",
+            )])),
+            ListItem::new(Line::from(vec![Span::raw(
+                "Use 'docker exec -it <container> ps aux' for detailed process info.",
+            )])),
         ];
 
-        let list = List::new(info)
-            .block(Block::default().borders(Borders::ALL).title("Process Information"));
+        let list = List::new(info).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Process Information"),
+        );
 
         frame.render_widget(list, area);
     }
@@ -662,13 +718,17 @@ impl StatsViewer {
 
         // Calculate CPU usage percentage
         let cpu_usage_percent = {
-            let cpu_delta = docker_stats.cpu_stats.cpu_usage.total_usage as f64 -
-                           docker_stats.precpu_stats.cpu_usage.total_usage as f64;
-            let system_delta = docker_stats.cpu_stats.system_cpu_usage.unwrap_or(0) as f64 -
-                              docker_stats.precpu_stats.system_cpu_usage.unwrap_or(0) as f64;
+            let cpu_delta = docker_stats.cpu_stats.cpu_usage.total_usage as f64
+                - docker_stats.precpu_stats.cpu_usage.total_usage as f64;
+            let system_delta = docker_stats.cpu_stats.system_cpu_usage.unwrap_or(0) as f64
+                - docker_stats.precpu_stats.system_cpu_usage.unwrap_or(0) as f64;
 
             if system_delta > 0.0 && cpu_delta > 0.0 {
-                let num_cpus = docker_stats.cpu_stats.cpu_usage.percpu_usage.as_ref()
+                let num_cpus = docker_stats
+                    .cpu_stats
+                    .cpu_usage
+                    .percpu_usage
+                    .as_ref()
                     .map(|v| v.len() as f64)
                     .unwrap_or(1.0);
                 (cpu_delta / system_delta) * num_cpus * 100.0
@@ -685,20 +745,19 @@ impl StatsViewer {
         let (memory_usage_bytes, memory_limit_bytes) = (usage, limit);
 
         // Get network stats
-        let (network_rx_bytes, network_tx_bytes) =
-            if let Some(networks) = &docker_stats.networks {
-                let mut total_rx = 0u64;
-                let mut total_tx = 0u64;
+        let (network_rx_bytes, network_tx_bytes) = if let Some(networks) = &docker_stats.networks {
+            let mut total_rx = 0u64;
+            let mut total_tx = 0u64;
 
-                for (_, network) in networks {
-                    total_rx += network.rx_bytes;
-                    total_tx += network.tx_bytes;
-                }
+            for network in networks.values() {
+                total_rx += network.rx_bytes;
+                total_tx += network.tx_bytes;
+            }
 
-                (total_rx, total_tx)
-            } else {
-                (0, 0)
-            };
+            (total_rx, total_tx)
+        } else {
+            (0, 0)
+        };
 
         // Get block I/O stats - FIXED SECTION
         let blkio_stats = &docker_stats.blkio_stats;

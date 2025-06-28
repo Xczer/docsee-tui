@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use bollard::{
-    network::{ListNetworksOptions, PruneNetworksOptions},
     models::Network as DockerNetwork,
+    network::{ListNetworksOptions, PruneNetworksOptions},
 };
 use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
@@ -102,7 +102,10 @@ impl DockerClient {
         // Format creation time
         let created = if let Some(created_at) = network.created {
             match DateTime::parse_from_rfc3339(&created_at) {
-                Ok(dt) => dt.with_timezone(&Local).format("%Y-%m-%d %H:%M:%S").to_string(),
+                Ok(dt) => dt
+                    .with_timezone(&Local)
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
                 Err(_) => "Unknown".to_string(),
             }
         } else {
@@ -132,7 +135,8 @@ impl DockerClient {
         };
 
         // Count connected containers
-        let connected_containers = network.containers
+        let connected_containers = network
+            .containers
             .map(|containers| containers.len())
             .unwrap_or(0);
 

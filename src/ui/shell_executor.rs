@@ -24,8 +24,8 @@ const MAX_HISTORY: usize = 100;
 /// Shell input mode - whether we're accepting text input vs navigation
 #[derive(Debug, Clone, PartialEq)]
 enum InputMode {
-    Normal,    // Navigation mode - arrow keys work for history
-    Typing,    // Text input mode - all keys go to input buffer
+    Normal, // Navigation mode - arrow keys work for history
+    Typing, // Text input mode - all keys go to input buffer
 }
 
 /// Shell execution session with improved input handling
@@ -92,10 +92,15 @@ impl ShellExecutor {
         self.history_position = None;
         self.input_mode = InputMode::Typing;
         self.output_history.clear();
-        self.status_message = Some(format!("Ready to execute commands in '{}'", self.container.as_ref().unwrap().name));
-        
+        self.status_message = Some(format!(
+            "Ready to execute commands in '{}'",
+            self.container.as_ref().unwrap().name
+        ));
+
         // Add welcome message to output
-        self.add_output_line("🐚 Shell session started. Type 'help' for commands, 'exit' to return.".to_string());
+        self.add_output_line(
+            "🐚 Shell session started. Type 'help' for commands, 'exit' to return.".to_string(),
+        );
         self.add_output_line("💡 Press F1 to toggle input mode, Tab to switch shells.".to_string());
     }
 
@@ -114,14 +119,12 @@ impl ShellExecutor {
                 self.show_help = !self.show_help;
                 return Ok(false);
             }
-            
+
             // Mode-specific key handling
-            _ => {
-                match self.input_mode {
-                    InputMode::Typing => self.handle_typing_mode(key).await?,
-                    InputMode::Normal => self.handle_normal_mode(key).await?,
-                }
-            }
+            _ => match self.input_mode {
+                InputMode::Typing => self.handle_typing_mode(key).await?,
+                InputMode::Normal => self.handle_normal_mode(key).await?,
+            },
         }
 
         Ok(false) // Stay in shell mode
@@ -251,12 +254,12 @@ impl ShellExecutor {
             InputMode::Typing => InputMode::Normal,
             InputMode::Normal => InputMode::Typing,
         };
-        
+
         let mode_name = match self.input_mode {
             InputMode::Typing => "Typing Mode - All keys go to input",
             InputMode::Normal => "Navigation Mode - Arrow keys scroll output",
         };
-        
+
         self.status_message = Some(format!("Switched to {}", mode_name));
     }
 
@@ -267,8 +270,8 @@ impl ShellExecutor {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(if self.show_help { 8 } else { 4 }), // Header
-                Constraint::Min(0),    // Command output
-                Constraint::Length(3), // Input line
+                Constraint::Min(0),                                     // Command output
+                Constraint::Length(3),                                  // Input line
             ])
             .split(area);
 
@@ -296,7 +299,10 @@ impl ShellExecutor {
             InputMode::Normal => "🧭 NAVIGATE",
         };
 
-        let title = format!("🐚 Shell: {} ({}) | {}", container_name, current_shell, mode_indicator);
+        let title = format!(
+            "🐚 Shell: {} ({}) | {}",
+            container_name, current_shell, mode_indicator
+        );
 
         let title_text = if let Some(ref message) = self.status_message {
             format!("{} - {}", title, message)
@@ -305,18 +311,39 @@ impl ShellExecutor {
         };
 
         let mut header_lines = vec![
-            Line::from(vec![
-                Span::styled(title_text, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
+            Line::from(vec![Span::styled(
+                title_text,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )]),
             Line::from(vec![
                 Span::styled("🎮 Controls: ", Style::default().fg(Color::Green)),
-                Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Esc",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Exit | "),
-                Span::styled("F1", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "F1",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Toggle Mode | "),
-                Span::styled("Tab", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Tab",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Switch Shell | "),
-                Span::styled("F2", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "F2",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 Span::raw(" Help"),
             ]),
         ];
@@ -324,26 +351,47 @@ impl ShellExecutor {
         if self.show_help {
             header_lines.extend(vec![
                 Line::from(vec![
-                    Span::styled("💡 Typing Mode: ", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "💡 Typing Mode: ",
+                        Style::default()
+                            .fg(Color::Blue)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Enter execute | ↑/↓ history | Ctrl+C clear | Ctrl+L clear output"),
                 ]),
                 Line::from(vec![
-                    Span::styled("🧭 Navigate Mode: ", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "🧭 Navigate Mode: ",
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("↑/↓ scroll output | PgUp/PgDn page | Home/End jump | c clear"),
                 ]),
                 Line::from(vec![
-                    Span::styled("🔧 Advanced: ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "🔧 Advanced: ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Ctrl+A/E line start/end | Ctrl+U/K clear line left/right"),
                 ]),
                 Line::from(vec![
-                    Span::styled("⚠️  Warning: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "⚠️  Warning: ",
+                        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw("Commands execute directly in container! Use with caution."),
                 ]),
             ]);
         }
 
-        let header = Paragraph::new(header_lines)
-            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Blue)));
+        let header = Paragraph::new(header_lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Blue)),
+        );
 
         frame.render_widget(header, area);
     }
@@ -380,13 +428,14 @@ impl ShellExecutor {
                     .border_style(match self.input_mode {
                         InputMode::Normal => Style::default().fg(Color::Yellow), // Highlight in nav mode
                         InputMode::Typing => Style::default().fg(Color::Gray),
-                    })
+                    }),
             )
             .highlight_style(Style::default().bg(Color::DarkGray));
 
         // Auto-scroll to bottom in typing mode, manual scroll in normal mode
         if self.input_mode == InputMode::Typing && !self.output_history.is_empty() {
-            self.output_list_state.select(Some(self.output_history.len() - 1));
+            self.output_list_state
+                .select(Some(self.output_history.len() - 1));
         }
 
         frame.render_stateful_widget(output_list, area, &mut self.output_list_state);
@@ -401,42 +450,53 @@ impl ShellExecutor {
             .unwrap_or("container");
 
         let prompt = format!("{}@{}:~$ ", "user", container_name);
-        
+
         // Build input line with cursor
-        let mut input_spans = vec![
-            Span::styled(prompt, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-        ];
+        let mut input_spans = vec![Span::styled(
+            prompt,
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )];
 
         // Add input text with cursor
         if self.cursor_position == 0 {
             // Cursor at beginning
-            input_spans.push(Span::styled("█", Style::default().fg(Color::White).bg(Color::DarkGray)));
+            input_spans.push(Span::styled(
+                "█",
+                Style::default().fg(Color::White).bg(Color::DarkGray),
+            ));
             input_spans.push(Span::raw(&self.current_input));
         } else if self.cursor_position >= self.current_input.len() {
             // Cursor at end
             input_spans.push(Span::raw(&self.current_input));
-            input_spans.push(Span::styled("█", Style::default().fg(Color::White).bg(Color::DarkGray)));
+            input_spans.push(Span::styled(
+                "█",
+                Style::default().fg(Color::White).bg(Color::DarkGray),
+            ));
         } else {
             // Cursor in middle
             let (before, after) = self.current_input.split_at(self.cursor_position);
             let cursor_char = after.chars().next().unwrap_or(' ');
             let after_cursor = &after[cursor_char.len_utf8()..];
-            
+
             input_spans.push(Span::raw(before));
-            input_spans.push(Span::styled(cursor_char.to_string(), Style::default().fg(Color::Black).bg(Color::White)));
+            input_spans.push(Span::styled(
+                cursor_char.to_string(),
+                Style::default().fg(Color::Black).bg(Color::White),
+            ));
             input_spans.push(Span::raw(after_cursor));
         }
 
-        let input_line = Paragraph::new(Line::from(input_spans))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Command Input")
-                    .border_style(match self.input_mode {
-                        InputMode::Typing => Style::default().fg(Color::Yellow), // Highlight in typing mode
-                        InputMode::Normal => Style::default().fg(Color::Gray),
-                    })
-            );
+        let input_line = Paragraph::new(Line::from(input_spans)).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Command Input")
+                .border_style(match self.input_mode {
+                    InputMode::Typing => Style::default().fg(Color::Yellow), // Highlight in typing mode
+                    InputMode::Normal => Style::default().fg(Color::Gray),
+                }),
+        );
 
         frame.render_widget(input_line, area);
     }
@@ -449,10 +509,10 @@ impl ShellExecutor {
 
         let command = self.current_input.clone();
         self.add_to_history(command.clone());
-        
+
         // Show the command in output
         self.add_output_line(format!("$ {}", command));
-        
+
         self.current_input.clear();
         self.cursor_position = 0;
         self.history_position = None;
@@ -488,7 +548,9 @@ impl ShellExecutor {
                         self.add_output_line(line.to_string());
                     }
                     if output.trim().is_empty() {
-                        self.add_output_line("(command executed successfully, no output)".to_string());
+                        self.add_output_line(
+                            "(command executed successfully, no output)".to_string(),
+                        );
                     }
                 }
                 Err(e) => {
@@ -514,7 +576,7 @@ impl ShellExecutor {
             "",
             "Shell commands:",
             "  ls       - List files",
-            "  pwd      - Print working directory", 
+            "  pwd      - Print working directory",
             "  cd DIR   - Change directory (single command only)",
             "  cat FILE - Show file contents",
             "  ps       - Show processes",
@@ -536,9 +598,9 @@ impl ShellExecutor {
     /// Execute command in the Docker container
     async fn execute_in_container(&self, container_id: &str, command: &str) -> Result<String> {
         let shell = &self.available_shells[self.current_shell];
-        
+
         let output = tokio::process::Command::new("docker")
-            .args(&["exec", container_id, shell, "-c", command])
+            .args(["exec", container_id, shell, "-c", command])
             .output()
             .await
             .context("Failed to execute docker command")?;
@@ -546,7 +608,7 @@ impl ShellExecutor {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
-            
+
             // Combine stdout and stderr
             let mut result = stdout.to_string();
             if !stderr.is_empty() {
@@ -556,11 +618,15 @@ impl ShellExecutor {
                 result.push_str("(stderr): ");
                 result.push_str(&stderr);
             }
-            
+
             Ok(result)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(anyhow::anyhow!("Command failed (exit code {}): {}", output.status.code().unwrap_or(-1), stderr))
+            Err(anyhow::anyhow!(
+                "Command failed (exit code {}): {}",
+                output.status.code().unwrap_or(-1),
+                stderr
+            ))
         }
     }
 
@@ -574,14 +640,17 @@ impl ShellExecutor {
         disable_raw_mode()?;
 
         // Clear the status message
-        println!("\n🐚 Starting interactive shell in container '{}'...", container.name);
+        println!(
+            "\n🐚 Starting interactive shell in container '{}'...",
+            container.name
+        );
         println!("💡 This is a full interactive shell session.");
         println!("🎯 Type 'exit' to return to Docsee.\n");
 
         // Start interactive docker exec
         let shell = &self.available_shells[self.current_shell];
         let mut child = Command::new("docker")
-            .args(&["exec", "-it", &container.id, shell])
+            .args(["exec", "-it", &container.id, shell])
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -612,8 +681,7 @@ impl ShellExecutor {
     /// Add command to history
     fn add_to_history(&mut self, command: String) {
         // Don't add empty commands or duplicates
-        if command.trim().is_empty() || 
-           self.command_history.back().map_or(false, |last| last == &command) {
+        if command.trim().is_empty() || (self.command_history.back() == Some(&command)) {
             return;
         }
 
@@ -634,7 +702,8 @@ impl ShellExecutor {
 
         // Auto-scroll to bottom in typing mode
         if self.input_mode == InputMode::Typing {
-            self.output_list_state.select(Some(self.output_history.len() - 1));
+            self.output_list_state
+                .select(Some(self.output_history.len() - 1));
         }
     }
 
@@ -690,7 +759,8 @@ impl ShellExecutor {
                 self.output_list_state.select(Some(selected - 1));
             }
         } else if !self.output_history.is_empty() {
-            self.output_list_state.select(Some(self.output_history.len() - 1));
+            self.output_list_state
+                .select(Some(self.output_history.len() - 1));
         }
     }
 
@@ -729,7 +799,8 @@ impl ShellExecutor {
     /// Scroll output to bottom
     fn scroll_output_to_bottom(&mut self) {
         if !self.output_history.is_empty() {
-            self.output_list_state.select(Some(self.output_history.len() - 1));
+            self.output_list_state
+                .select(Some(self.output_history.len() - 1));
         }
     }
 

@@ -78,23 +78,28 @@ impl ImagesTab {
             Key::DeleteItem => self.delete_selected_image().await?,
             Key::Logs => {
                 // Images don't have logs, show helpful message
-                self.status_message = Some("Images don't have logs. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Images don't have logs. Try containers instead!".to_string());
             }
             Key::Exec => {
                 // Can't exec into images, show helpful message
-                self.status_message = Some("Can't execute into images. Run as container first!".to_string());
+                self.status_message =
+                    Some("Can't execute into images. Run as container first!".to_string());
             }
             Key::Start => {
                 // Can't start images directly, show helpful message
-                self.status_message = Some("Can't start images. Create container first!".to_string());
+                self.status_message =
+                    Some("Can't start images. Create container first!".to_string());
             }
             Key::Stop => {
                 // Can't stop images, show helpful message
-                self.status_message = Some("Images are not running. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Images are not running. Try containers instead!".to_string());
             }
             Key::Restart => {
                 // Can't restart images, show helpful message
-                self.status_message = Some("Images are not running. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Images are not running. Try containers instead!".to_string());
             }
             Key::Prune => {
                 // Prune unused images
@@ -164,15 +169,11 @@ impl ImagesTab {
             ],
         )
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-        )
+        .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
 
@@ -218,7 +219,7 @@ impl ImagesTab {
         if let Some(image) = self.get_selected_image() {
             let id = image.id.clone();
             let name = if image.repository == "<none>" {
-                format!("{}", image.id)
+                image.id.to_string()
             } else {
                 format!("{}:{}", image.repository, image.tag)
             };

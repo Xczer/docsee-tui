@@ -79,23 +79,28 @@ impl VolumesTab {
             Key::Prune => self.prune_volumes().await?,
             Key::Logs => {
                 // Volumes don't have logs, show helpful message
-                self.status_message = Some("Volumes don't have logs. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Volumes don't have logs. Try containers instead!".to_string());
             }
             Key::Exec => {
                 // Can't exec into volumes, show helpful message
-                self.status_message = Some("Can't execute into volumes. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Can't execute into volumes. Try containers instead!".to_string());
             }
             Key::Start => {
                 // Can't start volumes, show helpful message
-                self.status_message = Some("Volumes are not services. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Volumes are not services. Try containers instead!".to_string());
             }
             Key::Stop => {
                 // Can't stop volumes, show helpful message
-                self.status_message = Some("Volumes are not running. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Volumes are not running. Try containers instead!".to_string());
             }
             Key::Restart => {
                 // Can't restart volumes, show helpful message
-                self.status_message = Some("Volumes are not services. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Volumes are not services. Try containers instead!".to_string());
             }
             _ => {}
         }
@@ -162,15 +167,11 @@ impl VolumesTab {
             ],
         )
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-        )
+        .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
 
@@ -218,7 +219,10 @@ impl VolumesTab {
 
             // For safety, warn about deleting in-use volumes
             if volume.in_use {
-                self.status_message = Some(format!("Warning: Volume '{}' is in use! Delete anyway with force.", name));
+                self.status_message = Some(format!(
+                    "Warning: Volume '{}' is in use! Delete anyway with force.",
+                    name
+                ));
                 // You could implement a confirmation dialog here
                 return Ok(());
             }
@@ -236,7 +240,8 @@ impl VolumesTab {
                             self.refresh().await?;
                         }
                         Err(_) => {
-                            self.status_message = Some(format!("Failed to delete '{}': {}", name, e));
+                            self.status_message =
+                                Some(format!("Failed to delete '{}': {}", name, e));
                         }
                     }
                 }

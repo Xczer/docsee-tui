@@ -79,23 +79,28 @@ impl NetworksTab {
             Key::Prune => self.prune_networks().await?,
             Key::Logs => {
                 // Networks don't have logs, show helpful message
-                self.status_message = Some("Networks don't have logs. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Networks don't have logs. Try containers instead!".to_string());
             }
             Key::Exec => {
                 // Can't exec into networks, show helpful message
-                self.status_message = Some("Can't execute into networks. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Can't execute into networks. Try containers instead!".to_string());
             }
             Key::Start => {
                 // Can't start networks, show helpful message
-                self.status_message = Some("Networks are not services. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Networks are not services. Try containers instead!".to_string());
             }
             Key::Stop => {
                 // Can't stop networks, show helpful message
-                self.status_message = Some("Networks are not running. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Networks are not running. Try containers instead!".to_string());
             }
             Key::Restart => {
                 // Can't restart networks, show helpful message
-                self.status_message = Some("Networks are not services. Try containers instead!".to_string());
+                self.status_message =
+                    Some("Networks are not services. Try containers instead!".to_string());
             }
             _ => {}
         }
@@ -111,7 +116,10 @@ impl NetworksTab {
             .map(|network| {
                 let style = if network.connected_containers > 0 {
                     Style::default().fg(Color::Green) // Networks with containers in green
-                } else if network.driver == "bridge" || network.driver == "host" || network.driver == "none" {
+                } else if network.driver == "bridge"
+                    || network.driver == "host"
+                    || network.driver == "none"
+                {
                     Style::default().fg(Color::Cyan) // Built-in networks in cyan
                 } else {
                     Style::default().fg(Color::White) // Custom networks in white
@@ -153,12 +161,21 @@ impl NetworksTab {
 
         // Build the title string
         let count = self.networks.len();
-        let active_count = self.networks.iter().filter(|n| n.connected_containers > 0).count();
-        let custom_count = self.networks.iter().filter(|n| {
-            !matches!(n.driver.as_str(), "bridge" | "host" | "none" | "null")
-        }).count();
+        let active_count = self
+            .networks
+            .iter()
+            .filter(|n| n.connected_containers > 0)
+            .count();
+        let custom_count = self
+            .networks
+            .iter()
+            .filter(|n| !matches!(n.driver.as_str(), "bridge" | "host" | "none" | "null"))
+            .count();
 
-        let title_text = format!("Networks ({} total, {} active, {} custom)", count, active_count, custom_count);
+        let title_text = format!(
+            "Networks ({} total, {} active, {} custom)",
+            count, active_count, custom_count
+        );
 
         let title = if let Some(ref message) = self.status_message {
             format!("{} - {}", title_text, message)
@@ -181,15 +198,11 @@ impl NetworksTab {
             ],
         )
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-        )
+        .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(
             Style::default()
                 .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
 
@@ -237,15 +250,19 @@ impl NetworksTab {
             let name = network.name.clone();
 
             // Safety check for built-in networks
-            if matches!(network.driver.as_str(), "bridge" | "host" | "none") && 
-               matches!(network.name.as_str(), "bridge" | "host" | "none") {
+            if matches!(network.driver.as_str(), "bridge" | "host" | "none")
+                && matches!(network.name.as_str(), "bridge" | "host" | "none")
+            {
                 self.status_message = Some(format!("Cannot delete built-in network '{}'", name));
                 return Ok(());
             }
 
             // Safety check for networks with connected containers
             if network.connected_containers > 0 {
-                self.status_message = Some(format!("Cannot delete network '{}' - {} containers still connected", name, network.connected_containers));
+                self.status_message = Some(format!(
+                    "Cannot delete network '{}' - {} containers still connected",
+                    name, network.connected_containers
+                ));
                 return Ok(());
             }
 

@@ -6,9 +6,9 @@ pub mod volumes;
 
 // Phase 2 components
 pub mod logs_viewer;
+pub mod search_filter;
 pub mod shell_executor;
 pub mod stats_viewer;
-pub mod search_filter;
 
 // Re-export for convenience
 pub use cheatsheet::CheatSheet;
@@ -19,6 +19,6 @@ pub use volumes::VolumesTab;
 
 // Phase 2 re-exports
 pub use logs_viewer::LogsViewer;
+pub use search_filter::AdvancedSearch;
 pub use shell_executor::ShellExecutor;
 pub use stats_viewer::StatsViewer;
-pub use search_filter::AdvancedSearch;

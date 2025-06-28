@@ -73,15 +73,15 @@ pub enum Key {
     Null,
 
     // Custom action keys for our app
-    Quit,           // 'q'
-    Cheatsheet,     // 'c'
-    DeleteItem,     // 'D' - delete container/image/etc
-    Start,          // 'u' - start container
-    Stop,           // 'd' - stop container
-    Restart,        // 'r' - restart container
-    Logs,           // 'l' - view logs
-    Exec,           // 'e' - execute shell
-    Prune,          // 'p' - prune unused resources
+    Quit,       // 'q'
+    Cheatsheet, // 'c'
+    DeleteItem, // 'D' - delete container/image/etc
+    Start,      // 'u' - start container
+    Stop,       // 'd' - stop container
+    Restart,    // 'r' - restart container
+    Logs,       // 'l' - view logs
+    Exec,       // 'e' - execute shell
+    Prune,      // 'p' - prune unused resources
 }
 
 impl Key {
@@ -257,37 +257,37 @@ impl From<event::KeyEvent> for Key {
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Char('s'), // Stats view
-            
+
             event::KeyEvent {
                 code: event::KeyCode::Char('i'),
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Char('i'), // Interactive shell
-            
+
             event::KeyEvent {
                 code: event::KeyCode::Char('/'),
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Char('/'), // Search
-            
+
             event::KeyEvent {
                 code: event::KeyCode::Char('f'),
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Char('f'), // Filter or Follow
-            
+
             event::KeyEvent {
                 code: event::KeyCode::Char('t'),
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Char('t'), // Timestamps
-            
+
             event::KeyEvent {
                 code: event::KeyCode::Char('+'),
                 modifiers: event::KeyModifiers::NONE,
                 ..
             } => Key::Char('+'), // Increase interval
-            
+
             event::KeyEvent {
                 code: event::KeyCode::Char('-'),
                 modifiers: event::KeyModifiers::NONE,
