@@ -93,7 +93,7 @@ impl DockerClient {
         self.inner()
             .inspect_container(id, None)
             .await
-            .with_context(|| format!("Failed to inspect container {}", id))
+            .with_context(|| format!("Failed to inspect container {id}"))
     }
 
     /// Start a container
@@ -101,7 +101,7 @@ impl DockerClient {
         self.inner()
             .start_container(id, None::<StartContainerOptions<String>>)
             .await
-            .with_context(|| format!("Failed to start container {}", id))
+            .with_context(|| format!("Failed to start container {id}"))
     }
 
     /// Stop a container

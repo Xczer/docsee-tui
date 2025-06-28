@@ -507,12 +507,12 @@ impl App {
         };
 
         let status_text = if let Some(ref global_status) = self.global_status {
-            format!(" | {}", global_status)
+            format!(" | {global_status}")
         } else {
             match self.current_tab {
                 TabType::Containers => {
                     if let Some(status) = self.containers_tab.get_status() {
-                        format!(" | {}", status)
+                        format!(" | {status}")
                     } else {
                         String::new()
                     }
@@ -521,7 +521,7 @@ impl App {
             }
         };
 
-        let footer = Paragraph::new(format!("{}{}", footer_text, status_text))
+        let footer = Paragraph::new(format!("{footer_text}{status_text}"))
             .style(Style::default().fg(Color::Gray))
             .alignment(Alignment::Center);
 
