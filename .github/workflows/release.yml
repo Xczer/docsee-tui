@@ -8,12 +8,14 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write
+
 jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
     outputs:
-      release_id: ${{ steps.create_release.outputs.id }}
       upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Checkout code
@@ -28,7 +30,7 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
-          # Generate changelog (you can enhance this)
+          # Generate changelog
           echo "## What's Changed" > RELEASE_NOTES.md
           echo "" >> RELEASE_NOTES.md
           
@@ -52,19 +54,19 @@ jobs:
           echo "## Installation" >> RELEASE_NOTES.md
           echo "\`\`\`bash" >> RELEASE_NOTES.md
           echo "# Download and install (Linux/macOS)" >> RELEASE_NOTES.md
-          echo "curl -L https://github.com/\${{ github.repository }}/releases/download/$VERSION/docsee-linux-x86_64 -o docsee" >> RELEASE_NOTES.md
+          echo "curl -L https://github.com/${{ github.repository }}/releases/download/$VERSION/docsee-linux-x86_64 -o docsee" >> RELEASE_NOTES.md
           echo "chmod +x docsee" >> RELEASE_NOTES.md
           echo "sudo mv docsee /usr/local/bin/" >> RELEASE_NOTES.md
           echo "\`\`\`" >> RELEASE_NOTES.md
 
       - name: Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.changelog.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ steps.changelog.outputs.version }}
           body_path: RELEASE_NOTES.md
           draft: false
           prerelease: false
@@ -164,53 +166,23 @@ jobs:
           # Generate checksum
           (Get-FileHash "${{ matrix.name }}" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.name }}" | Out-File -FilePath "${{ matrix.name }}.sha256" -Encoding ASCII
 
-      - name: Upload binary
-        uses: actions/upload-release-asset@v1
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.name }}
-          asset_name: ${{ matrix.name }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload compressed archive (Unix)
-        if: matrix.os != 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.name }}.tar.gz
-          asset_name: ${{ matrix.name }}.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload compressed archive (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.name }}.zip
-          asset_name: ${{ matrix.name }}.zip
-          asset_content_type: application/zip
-
-      - name: Upload checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ matrix.name }}.sha256
-          asset_name: ${{ matrix.name }}.sha256
-          asset_content_type: text/plain
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ${{ matrix.name }}
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.zip
+            ${{ matrix.name }}.sha256
 
   update-homebrew:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
     needs: [create-release, build-and-upload]
-    if: "!contains(github.ref, 'rc') && !contains(github.ref, 'beta')" # Only for stable releases
+    if: "!contains(github.ref, 'rc') && !contains(github.ref, 'beta')"
     steps:
       - name: Extract version
         id: version
