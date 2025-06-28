@@ -129,6 +129,7 @@ jobs:
           echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
 
       - name: Build release binary
+        shell: bash
         run: |
           if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
             # Use cross for ARM64 Linux builds
@@ -140,6 +141,7 @@ jobs:
 
       - name: Prepare binary (Unix)
         if: matrix.os != 'windows-latest'
+        shell: bash
         run: |
           cp target/${{ matrix.target }}/release/docsee ${{ matrix.name }}
           chmod +x ${{ matrix.name }}
@@ -152,14 +154,15 @@ jobs:
 
       - name: Prepare binary (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          copy target\${{ matrix.target }}\release\docsee.exe ${{ matrix.name }}
+          Copy-Item "target\${{ matrix.target }}\release\docsee.exe" "${{ matrix.name }}"
           
           # Create compressed archive
-          7z a ${{ matrix.name }}.zip ${{ matrix.name }}
+          Compress-Archive -Path "${{ matrix.name }}" -DestinationPath "${{ matrix.name }}.zip"
           
           # Generate checksum
-          certutil -hashfile ${{ matrix.name }} SHA256 > ${{ matrix.name }}.sha256
+          (Get-FileHash "${{ matrix.name }}" -Algorithm SHA256).Hash.ToLower() + "  ${{ matrix.name }}" | Out-File -FilePath "${{ matrix.name }}.sha256" -Encoding ASCII
 
       - name: Upload binary
         uses: actions/upload-release-asset@v1
