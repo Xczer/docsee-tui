@@ -5,9 +5,10 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout, Rect, Alignment},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, Borders, Paragraph},
+    text::{Line, Span},
     Frame, Terminal,
 };
 use std::io::{self, stdout};
@@ -26,7 +27,7 @@ use crate::{
 // Import our enhanced containers tab
 use crate::ui::containers::{EnhancedContainersTab, ContainerViewMode};
 
-/// Enhanced application with Phase 2 features
+/// Enhanced application with better navigation and ASCII art
 pub struct App {
     /// Docker client for API operations
     docker_client: DockerClient,
@@ -81,6 +82,16 @@ impl TabType {
             TabType::Images => "Images",
             TabType::Volumes => "Volumes",
             TabType::Networks => "Networks",
+        }
+    }
+
+    /// Get extra info for the current tab
+    pub fn info(&self) -> &'static str {
+        match self {
+            TabType::Containers => "Docker Container Management",
+            TabType::Images => "Docker Image Management",
+            TabType::Volumes => "Docker Volume Management",
+            TabType::Networks => "Docker Network Management",
         }
     }
 
@@ -145,7 +156,7 @@ impl App {
         let mut terminal = Terminal::new(backend)?;
 
         // Show welcome message
-        self.global_status = Some("🦆 Welcome to Docsee! New features: Real-time logs, Shell access, Stats monitoring, Advanced search".to_string());
+        self.global_status = Some("🦆 Welcome to Docsee v1.0! Real-time logs, Shell access, Stats monitoring, Advanced search".to_string());
 
         // Main application loop
         let result = self.main_loop(&mut terminal).await;
@@ -187,7 +198,7 @@ impl App {
         Ok(())
     }
 
-    /// Handle key press events
+    /// Handle key press events with special shell mode handling
     async fn handle_key_event(&mut self, key: crate::events::Key) -> Result<()> {
         use crate::events::Key;
 
@@ -208,7 +219,21 @@ impl App {
         self.in_container_subview = self.current_tab == TabType::Containers &&
                                     self.containers_tab.is_in_subview();
 
-        // Handle global keys first (unless in sub-view)
+        // Special handling for shell mode - intercept raw key events
+        if self.in_container_subview && 
+           self.containers_tab.get_view_mode() == &ContainerViewMode::Shell {
+            
+            // In shell mode, handle the key directly without converting to actions
+            let shell_exit = self.containers_tab.handle_shell_key_raw(key).await?;
+            if shell_exit {
+                // Shell requested exit, this will update the view mode
+                return Ok(());
+            }
+            // Don't process any other global keys in shell mode
+            return Ok(());
+        }
+
+        // Handle global keys first (unless in non-shell sub-view)
         if !self.in_container_subview {
             match key {
                 Key::Quit => {
@@ -230,7 +255,7 @@ impl App {
                 _ => {}
             }
         } else {
-            // In sub-view, allow some global keys
+            // In non-shell sub-view, allow some global keys
             match key {
                 Key::Quit => {
                     // Force exit sub-view first, then quit
@@ -291,22 +316,22 @@ impl App {
     fn draw(&mut self, frame: &mut Frame) {
         let size = frame.area();
 
-        // Create main layout: header, tabs, content, footer
+        // Create main layout: ASCII title, navigation header, content, footer
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Header with title and status
-                Constraint::Length(3), // Tab bar
+                Constraint::Length(8), // ASCII Art Title
+                Constraint::Length(3), // Navigation header with prev/current/next
                 Constraint::Min(0),    // Content area
                 Constraint::Length(1), // Footer
             ])
             .split(size);
 
-        // Draw header
-        self.draw_header(frame, chunks[0]);
+        // Draw ASCII art title
+        self.draw_ascii_title(frame, chunks[0]);
 
-        // Draw tab bar
-        self.draw_tabs(frame, chunks[1]);
+        // Draw navigation header
+        self.draw_navigation_header(frame, chunks[1]);
 
         // Draw content based on current tab
         if self.show_cheatsheet {
@@ -332,66 +357,121 @@ impl App {
         self.draw_footer(frame, chunks[3]);
     }
 
-    /// Draw the header with title and status
-    fn draw_header(&mut self, frame: &mut Frame, area: Rect) {
-        let status_text = if let Some(ref global_status) = self.global_status {
-            global_status.clone()
-        } else {
-            match self.current_tab {
-                TabType::Containers => {
-                    self.containers_tab.get_status().unwrap_or_else(|| "Ready".to_string())
-                }
-                _ => "Ready".to_string(),
-            }
-        };
+    /// Draw ASCII art title
+    fn draw_ascii_title(&mut self, frame: &mut Frame, area: Rect) {
+        let ascii_art = vec![
+            Line::from(Span::styled(
+                "██████╗  ██████╗  ██████╗███████╗███████╗███████╗",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            )),
+            Line::from(Span::styled(
+                "██╔══██╗██╔═══██╗██╔════╝██╔════╝██╔════╝██╔════╝",
+                Style::default().fg(Color::Cyan),
+            )),
+            Line::from(Span::styled(
+                "██║  ██║██║   ██║██║     ███████╗█████╗  █████╗  ",
+                Style::default().fg(Color::Blue),
+            )),
+            Line::from(Span::styled(
+                "██║  ██║██║   ██║██║     ╚════██║██╔══╝  ██╔══╝  ",
+                Style::default().fg(Color::Blue),
+            )),
+            Line::from(Span::styled(
+                "██████╔╝╚██████╔╝╚██████╗███████║███████╗███████╗",
+                Style::default().fg(Color::Magenta),
+            )),
+            Line::from(Span::styled(
+                "╚═════╝  ╚═════╝  ╚═════╝╚══════╝╚══════╝╚══════╝",
+                Style::default().fg(Color::Magenta),
+            )),
+            Line::from(Span::styled(
+                "            🦆 Docker Management TUI v1.0",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::ITALIC),
+            )),
+        ];
 
-        let header_text = if self.in_container_subview {
-            // Show current sub-view in header
-            format!("🦆 Docsee - {} | {}",
-                   self.containers_tab.get_view_mode().name(),
-                   status_text)
-        } else {
-            format!("🦆 Docsee - Docker Management | {}", status_text)
-        };
+        let title_paragraph = Paragraph::new(ascii_art)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::DarkGray)));
 
-        let header = Paragraph::new(header_text)
-            .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-            .block(Block::default().borders(Borders::ALL));
-
-        frame.render_widget(header, area);
+        frame.render_widget(title_paragraph, area);
     }
 
-    /// Draw the tab bar at the top
-    fn draw_tabs(&self, frame: &mut Frame, area: Rect) {
-        // Don't show tabs in sub-views to avoid confusion
+    /// Draw the navigation header with prev/current/next tabs
+    fn draw_navigation_header(&mut self, frame: &mut Frame, area: Rect) {
+        // Don't show navigation in sub-views to avoid confusion
         if self.in_container_subview {
-            let sub_view_info = Paragraph::new(
-                "📍 Sub-view active - Press Esc to return to main view, or use global shortcuts"
-            )
-            .style(Style::default().fg(Color::Yellow))
-            .block(Block::default().borders(Borders::ALL));
+            let sub_view_info_line = Line::from(vec![
+                Span::styled("📍 ", Style::default().fg(Color::Yellow)),
+                Span::styled(
+                    self.containers_tab.get_view_mode().name(),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" - Press "),
+                Span::styled("Esc", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::raw(" to return to main view"),
+            ]);
+
+            let sub_view_info = Paragraph::new(sub_view_info_line)
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::ALL));
 
             frame.render_widget(sub_view_info, area);
             return;
         }
 
-        let tab_names: Vec<&str> = TabType::all().iter().map(|tab| tab.name()).collect();
-        let current_index = TabType::all()
-            .iter()
-            .position(|&tab| tab == self.current_tab)
-            .unwrap_or(0);
+        // Create horizontal layout for navigation
+        let nav_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(25), // Previous tab
+                Constraint::Percentage(50), // Current tab (center)
+                Constraint::Percentage(25), // Next tab
+            ])
+            .split(area);
 
-        let tabs = Tabs::new(tab_names)
-            .block(Block::default().borders(Borders::ALL).title("Navigation"))
-            .style(Style::default().fg(Color::White))
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            )
-            .select(current_index);
+        let prev_tab = self.current_tab.previous();
+        let next_tab = self.current_tab.next();
 
-        frame.render_widget(tabs, area);
+        // Draw previous tab (left)
+        let prev_text = Line::from(vec![
+            Span::styled("← ", Style::default().fg(Color::Gray)),
+            Span::styled(prev_tab.name(), Style::default().fg(Color::Gray)),
+        ]);
+        let prev_paragraph = Paragraph::new(prev_text)
+            .alignment(Alignment::Left)
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(prev_paragraph, nav_chunks[0]);
+
+        // Draw current tab (center)
+        let current_text = vec![
+            Line::from(vec![
+                Span::styled(
+                    self.current_tab.name(),
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled(
+                    self.current_tab.info(),
+                    Style::default().fg(Color::White).add_modifier(Modifier::ITALIC),
+                ),
+            ]),
+        ];
+        let current_paragraph = Paragraph::new(current_text)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow)));
+        frame.render_widget(current_paragraph, nav_chunks[1]);
+
+        // Draw next tab (right)
+        let next_text = Line::from(vec![
+            Span::styled(next_tab.name(), Style::default().fg(Color::Gray)),
+            Span::styled(" →", Style::default().fg(Color::Gray)),
+        ]);
+        let next_paragraph = Paragraph::new(next_text)
+            .alignment(Alignment::Right)
+            .block(Block::default().borders(Borders::ALL));
+        frame.render_widget(next_paragraph, nav_chunks[2]);
     }
 
     /// Draw the footer with help information
@@ -400,19 +480,34 @@ impl App {
             // Show sub-view specific help
             match self.containers_tab.get_view_mode() {
                 ContainerViewMode::Logs => "Logs: ↑/↓ scroll | f follow | t timestamps | c clear | Esc back",
-                ContainerViewMode::Shell => "Shell: Type commands | ↑/↓ history | Tab switch shell | Esc back",
+                ContainerViewMode::Shell => "Shell: F1 toggle mode | Type commands | ↑/↓ history | Tab switch shell | Esc back",
                 ContainerViewMode::Stats => "Stats: ←/→ switch view | r reset | p pause | +/- interval | Esc back",
                 _ => "Container sub-view - Press Esc to return",
             }
         } else if self.show_cheatsheet {
             "Cheatsheet: Press Esc to close"
         } else {
-            "Global: q quit | c help | ←/→ tabs | Container: l logs | e shell | s stats | / search"
+            "Global: q quit | c help | ←/→ navigate | Container: l logs | e shell | s stats | / search"
         };
 
-        let footer = Paragraph::new(footer_text)
+        let status_text = if let Some(ref global_status) = self.global_status {
+            format!(" | {}", global_status)
+        } else {
+            match self.current_tab {
+                TabType::Containers => {
+                    if let Some(status) = self.containers_tab.get_status() {
+                        format!(" | {}", status)
+                    } else {
+                        String::new()
+                    }
+                }
+                _ => String::new(),
+            }
+        };
+
+        let footer = Paragraph::new(format!("{}{}", footer_text, status_text))
             .style(Style::default().fg(Color::Gray))
-            .alignment(ratatui::layout::Alignment::Center);
+            .alignment(Alignment::Center);
 
         frame.render_widget(footer, area);
     }

@@ -203,6 +203,35 @@ impl EnhancedContainersTab {
         Ok(())
     }
 
+    /// Handle raw key events for shell mode (bypasses key conversion)
+    pub async fn handle_shell_key_raw(&mut self, key: Key) -> Result<bool> {
+        match self.view_mode {
+            ContainerViewMode::Shell => {
+                // Convert action keys back to characters for shell input
+                let shell_key = match key {
+                    Key::Cheatsheet => Key::Char('c'),
+                    Key::Logs => Key::Char('l'),
+                    Key::Stop => Key::Char('d'),
+                    Key::Restart => Key::Char('r'),
+                    Key::Start => Key::Char('u'),
+                    Key::Exec => Key::Char('e'),
+                    Key::Prune => Key::Char('p'),
+                    // Keep other keys as they are
+                    _ => key,
+                };
+                
+                match self.shell_executor.handle_key(shell_key).await? {
+                    true => {
+                        self.exit_to_list_view().await?;
+                        Ok(true) // Exit requested
+                    }
+                    false => Ok(false), // Continue in shell mode
+                }
+            }
+            _ => Ok(false), // Not in shell mode
+        }
+    }
+
     /// Draw the enhanced containers tab
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
         match self.view_mode {

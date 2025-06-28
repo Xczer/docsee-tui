@@ -1,269 +1,238 @@
-# 🦆 Docsee - Docker TUI Manager
+# 🦆 Docsee - Docker Management TUI v1.0
 
-A beautiful terminal user interface for managing Docker containers, images, volumes, and networks. Built with Rust and Ratatui.
+```
+██████╗  ██████╗  ██████╗███████╗███████╗███████╗
+██╔══██╗██╔═══██╗██╔════╝██╔════╝██╔════╝██╔════╝
+██║  ██║██║   ██║██║     ███████╗█████╗  █████╗  
+██║  ██║██║   ██║██║     ╚════██║██╔══╝  ██╔══╝  
+██████╔╝╚██████╔╝╚██████╗███████║███████╗███████╗
+╚═════╝  ╚═════╝  ╚═════╝╚══════╝╚══════╝╚══════╝
+            🦆 Docker Management TUI v1.0
+```
 
-![Demo](https://via.placeholder.com/800x400?text=Docsee+Demo)
+A beautiful, feature-rich Docker management terminal user interface (TUI) application built with Rust and Ratatui. Docsee provides an intuitive interface for managing Docker containers, images, volumes, and networks with advanced features like real-time logging, shell access, resource monitoring, and powerful search capabilities.
 
 ## ✨ Features
 
-### 🐳 **Containers Management**
-- **View all containers** - Both running and stopped
-- **Container operations** - Start, stop, restart, delete
-- **Real-time status** - Color-coded status indicators
-- **Quick actions** - Keyboard shortcuts for common tasks
-- **Safety checks** - Prevents dangerous operations
+### 🏠 Core Management
+- **Container Management**: Start, stop, restart, delete containers with visual status indicators
+- **Image Management**: View, delete, and prune Docker images with size information
+- **Volume Management**: Manage Docker volumes with usage tracking
+- **Network Management**: Handle Docker networks with connection details
 
-### 🖼️ **Images Management**
-- **Browse images** - All local Docker images
-- **Image operations** - Delete images, prune unused
-- **Size information** - Human-readable size formatting
-- **Dangling detection** - Identify untagged images
-- **Space cleanup** - Prune to reclaim disk space
+### 🚀 Advanced Features
+- **Real-time Logs**: Stream container logs with word wrap, timestamps, and scrolling
+- **Shell Access**: Execute commands in containers with full terminal support
+- **Resource Stats**: Monitor CPU, memory, network, and disk usage in real-time
+- **Advanced Search**: Filter and search across all Docker resources
+- **Interactive Navigation**: Intuitive keyboard shortcuts and navigation
 
-### 💾 **Volumes Management** ⭐ *NEW*
-- **Volume overview** - All Docker volumes with usage info
-- **Usage tracking** - See which volumes are in use
-- **Size monitoring** - Track volume disk usage
-- **Safe deletion** - Warnings for volumes in use
-- **Cleanup tools** - Prune unused volumes to save space
+### 🎨 User Experience
+- **Beautiful ASCII Art**: Eye-catching title and visual elements
+- **Enhanced Navigation**: Previous/current/next tab display instead of traditional tabs
+- **Responsive Design**: Adapts to different terminal sizes
+- **Status Indicators**: Clear visual feedback for all operations
+- **Help System**: Comprehensive keyboard shortcuts and help
 
-### 🌐 **Networks Management** ⭐ *NEW*
-- **Network topology** - View all Docker networks
-- **Network details** - Driver, scope, subnet information
-- **Container connections** - See which containers are connected
-- **Network types** - Distinguish between internal, ingress, and external
-- **Safe operations** - Prevents deletion of networks with connected containers
-
-### 🎨 **User Experience**
-- **Intuitive navigation** - Tab-based interface with arrow keys
-- **Color-coded status** - Visual indicators for resource states
-- **Comprehensive help** - Built-in cheatsheet (press `c`)
-- **Error handling** - Graceful error messages and recovery
-- **Responsive design** - Adapts to terminal size
-
-## 🚀 Quick Start
+## 🚀 Installation
 
 ### Prerequisites
-- **Rust** (1.70+) - [Install Rust](https://rustup.rs/)
-- **Docker** - [Install Docker](https://docs.docker.com/get-docker/)
-- **Terminal** - Any modern terminal emulator
+- Docker installed and running
+- Rust toolchain (for building from source)
 
-### Installation
-
+### From Source
 ```bash
 # Clone the repository
 git clone https://github.com/Xczer/docsee.git
 cd docsee
 
 # Build and install
-make install
-
-# Or build manually
 cargo build --release
 cargo install --path .
+
+# Or use the provided Makefile
+make install
 ```
 
-### Running
-
+### Quick Start
 ```bash
 # Run with default Docker socket
 docsee
 
-# Specify custom Docker host
+# Run with custom Docker host
 docsee --docker-host unix:///var/run/docker.sock
+
+# Run with TCP connection
 docsee --docker-host tcp://localhost:2375
 ```
 
 ## 🎮 Usage
 
-### Global Controls
-- **`←/→`** - Switch between tabs
-- **`↑/↓`** - Navigate within current tab
-- **`c`** - Show/hide cheatsheet
-- **`q`** - Quit application
+### Navigation
+- **←/→**: Navigate between tabs (Containers, Images, Volumes, Networks)
+- **↑/↓**: Navigate items within lists
+- **Enter**: Select/activate item
+- **Esc**: Go back or exit
+- **q**: Quit application
+- **c**: Show help/cheatsheet
 
-### Container Tab
-- **`u`** - Start selected container
-- **`d`** - Stop selected container
-- **`r`** - Restart selected container
-- **`D`** - Delete selected container (if stopped)
-- **`l`** - View logs *(coming soon)*
-- **`e`** - Execute shell *(coming soon)*
+### Container Management
+- **u**: Start container
+- **d**: Stop container
+- **r**: Restart container
+- **D**: Delete container (when stopped)
+- **l**: View real-time logs
+- **e**: Shell executor mode
+- **s**: Resource stats monitoring
+- **i**: Interactive shell (full terminal)
+- **/**: Search and filter
 
-### Images Tab
-- **`D`** - Delete selected image
-- **`p`** - Prune unused images
+### Enhanced Logs Viewer
+- **f**: Toggle follow mode (auto-scroll)
+- **t**: Toggle timestamps
+- **w**: Toggle word wrap
+- **n**: Toggle line numbers
+- **c**: Clear logs
+- **+/-**: Adjust scroll speed
+- **PgUp/PgDn**: Page navigation
+- **Home/End**: Jump to start/end
 
-### Volumes Tab ⭐ *NEW*
-- **`D`** - Delete selected volume (with safety checks)
-- **`p`** - Prune unused volumes
+### Shell Access
+- **F1**: Toggle between typing and navigation modes
+- **F2**: Show/hide detailed help
+- **Tab**: Switch between shells (bash, sh, zsh, fish)
+- **↑/↓**: Command history (in typing mode)
+- **Ctrl+C**: Clear current input
+- **Ctrl+L**: Clear output
+- **Ctrl+A/E**: Jump to line start/end
 
-### Networks Tab ⭐ *NEW*
-- **`D`** - Delete selected network (with safety checks)
-- **`p`** - Prune unused networks
+### Resource Stats
+- **←/→**: Switch between view modes (Overview, Charts, Network, Processes)
+- **r**: Reset statistics
+- **p**: Pause/resume monitoring
+- **+/-**: Adjust update interval
 
-## 🏗️ Architecture
+## 🛠️ Configuration
 
-### Project Structure
-```
-docsee/
-├── src
-│   ├── docker
-│   │   ├── client.rs
-│   │   ├── containers.rs
-│   │   ├── images.rs
-│   │   ├── mod.rs
-│   │   ├── networks.rs
-│   │   └── volumes.rs
-│   ├── events
-│   │   ├── handler.rs
-│   │   ├── key.rs
-│   │   └── mod.rs
-│   ├── ui
-│   │   ├── cheatsheet.rs
-│   │   ├── containers.rs
-│   │   ├── images.rs
-│   │   ├── mod.rs
-│   │   ├── networks.rs
-│   │   ├── tabs.rs
-│   │   ├── search_filter.rs
-│   │   ├── shell_executor.rs
-│   │   ├── stats_viewer.rs
-│   │   └── volumes.rs
-│   ├── widgets
-│   │   ├── mod.rs
-│   │   ├── modal.rs
-│   │   └── table.rs
-│   ├── app.rs
-│   ├── lib.rs
-│   └── main.rs
-├── Cargo.lock
-├── Cargo.toml
-├── Makefile
-└── README.md
+Docsee can be configured via command line arguments:
+
+```bash
+docsee --help
 ```
 
-### Key Technologies
-- **[Ratatui](https://ratatui.rs/)** - Terminal UI framework
-- **[Bollard](https://docs.rs/bollard/)** - Docker API client
-- **[Crossterm](https://docs.rs/crossterm/)** - Cross-platform terminal
-- **[Tokio](https://tokio.rs/)** - Async runtime
+### Docker Connection
+- **Unix Socket**: `--docker-host unix:///var/run/docker.sock` (default)
+- **TCP**: `--docker-host tcp://localhost:2375`
+- **SSH**: `--docker-host ssh://user@host`
 
-### Design Patterns
-- **Component-based UI** - Modular, reusable components
-- **Event-driven** - Async event handling with clean separation
-- **Error resilience** - Comprehensive error handling and recovery
-- **Type safety** - Rust's type system prevents runtime errors
-
-## 🛠️ Development
+## 🔧 Development
 
 ### Building
 ```bash
 # Development build
-make build
+cargo build
 
 # Release build
-make release
+cargo build --release
 
-# Run in development
-make run
+# Run tests
+cargo test
+
+# Run with cargo
+cargo run
 ```
 
-### Code Quality
-```bash
-# Format code
-make fmt
-
-# Lint code
-make clippy
-
-# All checks
-make dev-check
+### Project Structure
+```
+src/
+├── app.rs              # Main application logic
+├── docker/             # Docker client and API wrappers
+├── events/             # Event handling system
+├── ui/                 # User interface components
+│   ├── containers.rs   # Enhanced container management
+│   ├── logs_viewer.rs  # Real-time log streaming
+│   ├── shell_executor.rs # Shell access functionality
+│   ├── stats_viewer.rs # Resource monitoring
+│   └── search_filter.rs # Advanced search/filtering
+└── widgets/            # Custom UI widgets
 ```
 
-## 🔧 Configuration
+## 🎯 Possible Enhancements for Future Versions
 
-### Command Line Options
-```bash
-docsee --help
+### Core Features
+- **Docker Compose Support**: Manage multi-container applications
+- **Image Building**: Build images from Dockerfiles within the TUI
+- **Registry Integration**: Pull/push images to/from registries
+- **Container Templates**: Save and reuse container configurations
 
-Options:
-  --docker-host <HOST>  Docker host URL
-  -h, --help           Print help
-  -V, --version        Print version
-```
+### Advanced Features
+- **Multi-host Support**: Manage multiple Docker hosts simultaneously
+- **Backup/Restore**: Export/import container configurations
+- **Health Monitoring**: Container health checks and alerts
+- **Performance Profiling**: Detailed resource usage analytics
 
-### Environment Variables
-- **`DOCKER_HOST`** - Docker daemon socket (default: `unix:///var/run/docker.sock`)
+### User Experience
+- **Themes**: Customizable color schemes and themes
+- **Plugins**: Extensible plugin system for custom functionality
+- **Configuration Files**: Persistent settings and preferences
+- **Quick Actions**: Keyboard shortcuts for common operations
 
-## 🎯 Roadmap
+### Integration
+- **Kubernetes Support**: Manage Kubernetes pods and services
+- **CI/CD Integration**: Integrate with popular CI/CD pipelines
+- **Monitoring Tools**: Integration with Prometheus, Grafana, etc.
+- **Notification System**: Alerts for container events
 
-### Phase 1: Core Features  ✅ *COMPLETED*
-- [x] Container management (start, stop, restart, delete)
-- [x] Image management (delete, prune)
-- [x] Volume management (list, delete, prune) ⭐ *NEW*
-- [x] Network management (list, delete, prune) ⭐ *NEW*
-- [x] Tab navigation and help system
+### Advanced Shell Features
+- **File Manager**: Built-in file browser for containers
+- **Multi-session**: Multiple shell sessions per container
+- **Session Persistence**: Save and restore shell sessions
+- **Syntax Highlighting**: Enhanced command syntax highlighting
 
-### Phase 2: Enhanced Features ✅ *COMPLETED*
-- [x] **Container logs viewer** - Real-time log streaming
-- [x] **Shell execution** - Interactive terminal access
-- [x] **Container stats** - CPU, memory, network monitoring
-- [x] **Search and filtering** - Find resources quickly
-
-### Phase 3: Advanced Features *(Planned)*
-- [ ] **Docker Compose** - Manage multi-container applications
-- [ ] **Registry integration** - Pull/push images
-- [ ] **Resource creation** - Create volumes, networks, containers
-- [ ] **Export/import** - Backup and restore configurations
-
-### Phase 4: Enterprise Features *(Future)*
-- [ ] **Remote Docker hosts** - Manage multiple Docker daemons
-- [ ] **Kubernetes support** - Extend to K8s resources
-- [ ] **Team collaboration** - Shared configurations
-- [ ] **Advanced monitoring** - Performance metrics and alerts
+### Logging Enhancements
+- **Log Aggregation**: Combine logs from multiple containers
+- **Log Export**: Export logs to various formats (JSON, CSV, etc.)
+- **Log Analysis**: Built-in log parsing and analysis tools
+- **Real-time Filtering**: Advanced log filtering and highlighting
 
 ## 🤝 Contributing
 
-We welcome contributions! Here's how to get started:
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
 
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Make** your changes
-4. **Test** thoroughly (`make test`)
-5. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-6. **Push** to the branch (`git push origin feature/amazing-feature`)
-7. **Open** a Pull Request
+### Guidelines
+- Follow Rust best practices
+- Add tests for new features
+- Update documentation
+- Ensure code passes `cargo clippy` and `cargo fmt`
 
-### Development Guidelines
-- Follow Rust conventions and use `rustfmt`
-- Add tests for new functionality
-- Update documentation for user-facing changes
-- Keep commits focused and descriptive
-
-## 📝 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
-- **[Ratatui](https://ratatui.rs/)** - Excellent TUI framework
-- **[Bollard](https://docs.rs/bollard/)** - Comprehensive Docker API
-- **[k9s](https://k9scli.io/)** - Inspiration for TUI design
-- **Docker Community** - For the amazing container platform
+- Built with [Ratatui](https://github.com/ratatui-org/ratatui) - Amazing TUI framework for Rust
+- Inspired by [k9s](https://github.com/derailed/k9s) - Kubernetes TUI
+- Docker integration via [Bollard](https://github.com/fussybeaver/bollard) - Docker API client
 
-## 📞 Support
+## 🐛 Bug Reports
 
-- **Issues** - [GitHub Issues](https://github.com/Xczer/docsee/issues)
-- **Discussions** - [GitHub Discussions](https://github.com/Xczer/docsee/discussions)
-- **Documentation** - Check the built-in cheatsheet (press `c`)
+If you encounter any bugs or issues, please create an issue on GitHub with:
+- Your operating system and version
+- Docker version
+- Steps to reproduce the issue
+- Expected vs actual behavior
+- Any error messages
+
+## 🌟 Show Your Support
+
+If you find Docsee useful, please consider:
+- ⭐ Starring the repository
+- 🍴 Forking the project
+- 📢 Sharing with others
+- 🐛 Reporting bugs
+- 💡 Suggesting features
 
 ---
 
-<div align="center">
-
-**⭐ If you find Docsee useful, please consider giving it a star on GitHub! ⭐**
-
-Made with ❤️ and 🦀 Rust
-
-</div>
+**Happy Docker Management with Docsee! 🦆**

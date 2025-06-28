@@ -1,11 +1,11 @@
-# Docsee - Docker TUI Manager
+# Docsee - Docker TUI Manager v1.0
 # Simple Makefile for common development tasks
 
-.PHONY: build run test clean check fmt clippy install help
+.PHONY: build run test clean check fmt clippy install help release
 
 # Default target
 help:
-	@echo "Docsee - Docker TUI Manager"
+	@echo "Docsee - Docker TUI Manager v1.0"
 	@echo ""
 	@echo "Available commands:"
 	@echo "  build     - Build the application"
@@ -16,16 +16,17 @@ help:
 	@echo "  clippy    - Run clippy linter"
 	@echo "  clean     - Clean build artifacts"
 	@echo "  install   - Install the binary"
+	@echo "  release   - Build optimized release version"
 	@echo "  help      - Show this help"
 
 # Build the application
 build:
-	@echo "🔨 Building Docsee..."
+	@echo "🔨 Building Docsee v1.0..."
 	cargo build --release
 
 # Run the application in development mode
 run:
-	@echo "🚀 Running Docsee..."
+	@echo "🚀 Running Docsee v1.0..."
 	cargo run
 
 # Run tests
@@ -55,7 +56,7 @@ clean:
 
 # Install the binary to ~/.cargo/bin
 install: build
-	@echo "📦 Installing Docsee..."
+	@echo "📦 Installing Docsee v1.0..."
 	cargo install --path .
 
 # Development workflow - check everything
@@ -67,3 +68,10 @@ release: clean
 	@echo "🏗️ Building release version..."
 	cargo build --release --locked
 	@echo "✅ Release build complete: target/release/docsee"
+	@echo ""
+	@echo "🦆 Docsee v1.0 is ready for deployment!"
+
+# Quick test of the application
+quick-test: build
+	@echo "🧪 Quick testing Docsee..."
+	./target/release/docsee --help
