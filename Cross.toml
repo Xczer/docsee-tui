@@ -1,0 +1,14 @@
+# Cross.toml - Configuration for cross-compilation tool
+# This ensures consistent and reliable cross-compilation
+
+[target.aarch64-unknown-linux-gnu]
+# Use stable image with older glibc for better compatibility
+# This works on both older local systems and GitHub Actions
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:0.2.5"
+
+[build.env]
+# Set environment variables for all builds
+passthrough = [
+  "GITHUB_*",
+  "CI",
+]

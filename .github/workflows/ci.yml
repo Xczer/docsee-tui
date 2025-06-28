@@ -114,15 +114,32 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-cargo-
 
-      - name: Install cross-compilation tools (Linux ARM64)
+      - name: Install cross-compilation tools
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
+          # Install cross for robust cross-compilation
+          cargo install cross --git https://github.com/cross-rs/cross
+          
+          # Also install traditional tools as backup
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
+      - name: Configure linker (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          mkdir -p ~/.cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"' >> ~/.cargo/config.toml
+
       - name: Build binary
         run: |
-          cargo build --release --target ${{ matrix.target }}
+          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
+            # Use cross for ARM64 Linux builds
+            cross build --release --target ${{ matrix.target }}
+          else
+            # Use standard cargo for other targets
+            cargo build --release --target ${{ matrix.target }}
+          fi
 
       - name: Prepare binary (Unix)
         if: matrix.os != 'windows-latest'
