@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame,
 };
@@ -9,28 +9,37 @@ use ratatui::{
 use crate::{
     docker::{volumes::Volume, DockerClient},
     events::Key,
+    theme::Theme,
+    widgets::modal::{ActionType, ConfirmationModal, PendingAction, Severity},
 };
+
+use super::containers::{SortDirection, SortState};
 
 /// The volumes tab widget
 pub struct VolumesTab {
-    /// Docker client for operations
     docker_client: DockerClient,
-    /// List of volumes
     volumes: Vec<Volume>,
-    /// Table state for selection
     table_state: TableState,
-    /// Status message to show
     status_message: Option<String>,
+    pending_action: Option<PendingAction>,
+    theme: Theme,
+    sort_state: SortState,
 }
 
 impl VolumesTab {
     /// Create a new volumes tab
-    pub async fn new(docker_client: DockerClient) -> Result<Self> {
+    pub async fn new(docker_client: DockerClient, theme: Theme) -> Result<Self> {
         let mut tab = Self {
             docker_client,
             volumes: Vec::new(),
             table_state: TableState::default(),
             status_message: None,
+            pending_action: None,
+            theme,
+            sort_state: SortState {
+                column_index: 0,
+                direction: SortDirection::Ascending,
+            },
         };
 
         // Load initial data
@@ -70,13 +79,86 @@ impl VolumesTab {
         Ok(())
     }
 
+    /// Handle confirmation modal keys
+    async fn handle_confirmation_key(&mut self, key: Key) -> Result<()> {
+        match key {
+            Key::Left | Key::Right => {
+                if let Some(ref mut pending) = self.pending_action {
+                    pending.toggle_selection();
+                }
+            }
+            Key::Enter => {
+                if let Some(pending) = self.pending_action.take() {
+                    if pending.confirm_selected {
+                        match pending.action {
+                            ActionType::DeleteVolume { name } => {
+                                match self.docker_client.remove_volume(&name, false).await {
+                                    Ok(_) => {
+                                        self.status_message =
+                                            Some(format!("Deleted volume '{}'", name));
+                                        self.refresh().await?;
+                                    }
+                                    Err(e) => {
+                                        self.status_message = Some(format!(
+                                            "Failed to delete '{}': {}",
+                                            name, e
+                                        ));
+                                    }
+                                }
+                            }
+                            ActionType::PruneVolumes => {
+                                self.prune_volumes().await?;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            Key::Esc => {
+                self.pending_action = None;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Handle key press events
     pub async fn handle_key(&mut self, key: Key) -> Result<()> {
+        if self.pending_action.is_some() {
+            return self.handle_confirmation_key(key).await;
+        }
+
         match key {
             Key::Up => self.move_selection_up(),
             Key::Down => self.move_selection_down(),
-            Key::DeleteItem => self.delete_selected_volume().await?,
-            Key::Prune => self.prune_volumes().await?,
+            Key::Char('o') => { self.cycle_sort_column(); }
+            Key::Char('O') => { self.reverse_sort_direction(); }
+            Key::DeleteItem => {
+                if let Some(volume) = self.get_selected_volume() {
+                    let name = volume.name.clone();
+                    if volume.in_use {
+                        self.status_message = Some(format!(
+                            "Warning: Volume '{}' is in use!",
+                            name
+                        ));
+                        return Ok(());
+                    }
+                    self.pending_action = Some(PendingAction::new(
+                        "Delete Volume".to_string(),
+                        format!("Delete volume '{}'?", name),
+                        Severity::Danger,
+                        ActionType::DeleteVolume { name },
+                    ));
+                }
+            }
+            Key::Prune => {
+                self.pending_action = Some(PendingAction::new(
+                    "Prune Volumes".to_string(),
+                    "Remove all unused volumes?".to_string(),
+                    Severity::Warning,
+                    ActionType::PruneVolumes,
+                ));
+            }
             Key::Logs => {
                 // Volumes don't have logs, show helpful message
                 self.status_message =
@@ -109,15 +191,15 @@ impl VolumesTab {
 
     /// Draw the volumes tab
     pub fn draw(&mut self, frame: &mut Frame, area: Rect) {
-        // Create table rows
+        let t = &self.theme;
         let rows: Vec<Row> = self
             .volumes
             .iter()
             .map(|volume| {
                 let style = if volume.in_use {
-                    Style::default().fg(Color::Green) // In-use volumes in green
+                    Style::default().fg(t.success)
                 } else {
-                    Style::default().fg(Color::White) // Unused volumes in white
+                    Style::default().fg(t.fg)
                 };
 
                 Row::new(vec![
@@ -125,22 +207,31 @@ impl VolumesTab {
                     Cell::from(volume.driver.clone()),
                     Cell::from(volume.scope.clone()),
                     Cell::from(volume.size.clone()),
-                    Cell::from(if volume.in_use { "🟢 Yes" } else { "⭕ No" }),
+                    Cell::from(if volume.in_use { "Yes" } else { "No" }),
                     Cell::from(volume.created.clone()),
                 ])
                 .style(style)
             })
             .collect();
 
-        // Create table headers
-        let header = Row::new(vec![
-            Cell::from("Name").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Driver").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Scope").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Size").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("In Use").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Created").style(Style::default().add_modifier(Modifier::BOLD)),
-        ]);
+        let columns = ["Name", "Driver", "Scope", "Size", "In Use", "Created"];
+        let header_cells: Vec<Cell> = columns
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let label = if i == self.sort_state.column_index {
+                    let arrow = match self.sort_state.direction {
+                        SortDirection::Ascending => " ^",
+                        SortDirection::Descending => " v",
+                    };
+                    format!("{}{}", name, arrow)
+                } else {
+                    name.to_string()
+                };
+                Cell::from(label).style(Style::default().add_modifier(Modifier::BOLD))
+            })
+            .collect();
+        let header = Row::new(header_cells);
 
         // Build the title string
         let count = self.volumes.len();
@@ -170,13 +261,16 @@ impl VolumesTab {
         .block(Block::default().borders(Borders::ALL).title(title))
         .row_highlight_style(
             Style::default()
-                .bg(Color::DarkGray)
+                .bg(t.highlight_bg)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol(">> ");
 
-        // Render the table
         frame.render_stateful_widget(table, area, &mut self.table_state);
+
+        if let Some(ref pending) = self.pending_action {
+            ConfirmationModal::draw(frame, area, pending);
+        }
     }
 
     /// Get the currently selected volume
@@ -212,49 +306,11 @@ impl VolumesTab {
         self.table_state.select(Some(new_index));
     }
 
-    /// Delete the selected volume
-    async fn delete_selected_volume(&mut self) -> Result<()> {
-        if let Some(volume) = self.get_selected_volume() {
-            let name = volume.name.clone();
-
-            // For safety, warn about deleting in-use volumes
-            if volume.in_use {
-                self.status_message = Some(format!(
-                    "Warning: Volume '{}' is in use! Delete anyway with force.",
-                    name
-                ));
-                // You could implement a confirmation dialog here
-                return Ok(());
-            }
-
-            match self.docker_client.remove_volume(&name, false).await {
-                Ok(_) => {
-                    self.status_message = Some(format!("Deleted volume '{}'", name));
-                    self.refresh().await?;
-                }
-                Err(e) => {
-                    // Try force delete if normal delete fails
-                    match self.docker_client.remove_volume(&name, true).await {
-                        Ok(_) => {
-                            self.status_message = Some(format!("Force deleted volume '{}'", name));
-                            self.refresh().await?;
-                        }
-                        Err(_) => {
-                            self.status_message =
-                                Some(format!("Failed to delete '{}': {}", name, e));
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Prune unused volumes
     async fn prune_volumes(&mut self) -> Result<()> {
         match self.docker_client.prune_volumes().await {
             Ok(space_reclaimed) => {
-                let space_mb = space_reclaimed as f64 / 1_048_576.0; // Convert to MB
+                let space_mb = space_reclaimed as f64 / 1_048_576.0;
                 self.status_message = Some(format!("Pruned volumes, reclaimed {:.1} MB", space_mb));
                 self.refresh().await?;
             }
@@ -264,24 +320,48 @@ impl VolumesTab {
         }
         Ok(())
     }
-}
 
-/*
-EXPLANATION:
-- VolumesTab manages the Docker volumes display and interactions
-- new() creates the tab and loads initial volume data
-- refresh() reloads volumes from Docker, preserving current selection
-- handle_key() processes keyboard shortcuts:
-  - Up/Down arrows: navigate the volume list
-  - D: delete volume (with safety checks for in-use volumes)
-  - p: prune unused volumes
-  - Other container keys show helpful messages explaining they don't apply to volumes
-- draw() renders the volumes table with color coding:
-  - Green: volumes currently in use by containers
-  - White: unused volumes
-- The table shows: Name, Driver, Scope, Size, In Use status, Created date
-- Title shows total volumes and in-use count
-- delete_selected_volume() has safety checks and tries force delete if needed
-- prune_volumes() cleans up unused volumes and shows space reclaimed
-- Error handling provides user feedback for all operations
-*/
+    pub fn select_row(&mut self, index: usize) {
+        if index < self.volumes.len() {
+            self.table_state.select(Some(index));
+        }
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.move_selection_up();
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.move_selection_down();
+    }
+
+    fn apply_sort(&mut self) {
+        let col = self.sort_state.column_index;
+        let desc = self.sort_state.direction == SortDirection::Descending;
+        self.volumes.sort_by(|a, b| {
+            let cmp = match col {
+                0 => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                1 => a.driver.to_lowercase().cmp(&b.driver.to_lowercase()),
+                2 => a.scope.to_lowercase().cmp(&b.scope.to_lowercase()),
+                3 => a.size.cmp(&b.size),
+                4 => a.in_use.cmp(&b.in_use),
+                5 => a.created.cmp(&b.created),
+                _ => std::cmp::Ordering::Equal,
+            };
+            if desc { cmp.reverse() } else { cmp }
+        });
+    }
+
+    fn cycle_sort_column(&mut self) {
+        self.sort_state.column_index = (self.sort_state.column_index + 1) % 6;
+        self.apply_sort();
+    }
+
+    fn reverse_sort_direction(&mut self) {
+        self.sort_state.direction = match self.sort_state.direction {
+            SortDirection::Ascending => SortDirection::Descending,
+            SortDirection::Descending => SortDirection::Ascending,
+        };
+        self.apply_sort();
+    }
+}

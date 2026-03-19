@@ -1,7 +1,10 @@
 pub mod cheatsheet;
 pub mod containers;
 pub mod images;
+pub mod inspect_viewer;
 pub mod networks;
+pub mod system;
+pub mod topology;
 pub mod volumes;
 
 // Phase 2 components
@@ -15,6 +18,7 @@ pub use cheatsheet::CheatSheet;
 pub use containers::EnhancedContainersTab;
 pub use images::ImagesTab;
 pub use networks::NetworksTab;
+pub use system::SystemTab;
 pub use volumes::VolumesTab;
 
 // Phase 2 re-exports

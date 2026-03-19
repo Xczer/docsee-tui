@@ -9,6 +9,8 @@ use super::key::Key;
 pub enum AppEvent {
     /// A key was pressed
     Key(Key),
+    /// A mouse event occurred
+    Mouse(crossterm::event::MouseEvent),
     /// Application should tick (for periodic updates)
     Tick,
     /// Application should quit
@@ -75,16 +77,17 @@ impl EventHandler {
                                 break; // Channel closed
                             }
                         }
+                        Ok(Event::Mouse(mouse_event)) => {
+                            if sender.send(AppEvent::Mouse(mouse_event)).is_err() {
+                                break;
+                            }
+                        }
                         Ok(Event::Resize(_, _)) => {
-                            // Terminal was resized - ratatui handles this automatically
-                            // but we might want to trigger a redraw
                             if sender.send(AppEvent::Tick).is_err() {
                                 break;
                             }
                         }
-                        _ => {
-                            // Ignore other events (mouse, focus, etc.)
-                        }
+                        _ => {}
                     }
                 }
             }

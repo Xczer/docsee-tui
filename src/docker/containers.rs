@@ -23,6 +23,10 @@ pub struct Container {
     pub ports: String,
     pub created: String,
     pub size: Option<String>,
+    /// Docker Compose project name (from label)
+    pub compose_project: Option<String>,
+    /// Docker Compose service name (from label)
+    pub compose_service: Option<String>,
 }
 
 /// Container state for easy status checking
@@ -122,6 +126,41 @@ impl DockerClient {
             .with_context(|| format!("Failed to restart container {}", id))
     }
 
+    /// Create and start a container from an image
+    pub async fn create_and_start_container(&self, image: &str, name: Option<&str>) -> Result<String> {
+        use bollard::container::Config;
+
+        let config = Config {
+            image: Some(image.to_string()),
+            ..Default::default()
+        };
+
+        let mut options = bollard::container::CreateContainerOptions {
+            name: name.unwrap_or("").to_string(),
+            platform: None,
+        };
+        if name.is_none() || name == Some("") {
+            // Let Docker generate a name
+            options.name = String::new();
+        }
+
+        let response = if options.name.is_empty() {
+            self.inner()
+                .create_container(None::<bollard::container::CreateContainerOptions<String>>, config)
+                .await
+                .context("Failed to create container")?
+        } else {
+            self.inner()
+                .create_container(Some(options), config)
+                .await
+                .context("Failed to create container")?
+        };
+
+        let id = response.id;
+        self.start_container(&id).await?;
+        Ok(id)
+    }
+
     /// Remove a container
     pub async fn remove_container(&self, id: &str, force: bool) -> Result<()> {
         let options = RemoveContainerOptions {
@@ -134,6 +173,42 @@ impl DockerClient {
             .remove_container(id, Some(options))
             .await
             .with_context(|| format!("Failed to remove container {}", id))
+    }
+
+    /// Start all stopped containers in a compose project
+    pub async fn compose_up(&self, project: &str) -> Result<(usize, usize)> {
+        let containers = self.list_containers().await?;
+        let mut ok = 0;
+        let mut fail = 0;
+        for c in &containers {
+            if c.compose_project.as_deref() == Some(project)
+                && c.state != ContainerState::Running
+            {
+                match self.start_container(&c.id).await {
+                    Ok(_) => ok += 1,
+                    Err(_) => fail += 1,
+                }
+            }
+        }
+        Ok((ok, fail))
+    }
+
+    /// Stop all running containers in a compose project
+    pub async fn compose_down(&self, project: &str) -> Result<(usize, usize)> {
+        let containers = self.list_containers().await?;
+        let mut ok = 0;
+        let mut fail = 0;
+        for c in &containers {
+            if c.compose_project.as_deref() == Some(project)
+                && c.state == ContainerState::Running
+            {
+                match self.stop_container(&c.id).await {
+                    Ok(_) => ok += 1,
+                    Err(_) => fail += 1,
+                }
+            }
+        }
+        Ok((ok, fail))
     }
 
     /// Format a container summary into our Container struct
@@ -155,6 +230,15 @@ impl DockerClient {
         let image = container.image.unwrap_or_default();
         let status = container.status.unwrap_or_default();
         let state = ContainerState::from(container.state.as_deref());
+
+        // Extract Docker Compose labels
+        let labels = container.labels.as_ref();
+        let compose_project = labels
+            .and_then(|l| l.get("com.docker.compose.project"))
+            .cloned();
+        let compose_service = labels
+            .and_then(|l| l.get("com.docker.compose.service"))
+            .cloned();
 
         // Format ports
         let ports = if let Some(port_list) = container.ports {
@@ -197,7 +281,9 @@ impl DockerClient {
             state,
             ports,
             created,
-            size: None, // Would need separate API call to get size
+            size: None,
+            compose_project,
+            compose_service,
         })
     }
 }

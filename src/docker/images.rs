@@ -142,6 +142,25 @@ impl DockerClient {
         Ok(result)
     }
 
+    /// Pull an image from a registry
+    pub async fn pull_image(&self, image_name: &str) -> Result<()> {
+        use bollard::image::CreateImageOptions;
+
+        let options = Some(CreateImageOptions {
+            from_image: image_name,
+            ..Default::default()
+        });
+
+        let mut stream = self.inner().create_image(options, None, None);
+
+        while let Some(result) = futures::stream::TryStreamExt::try_next(&mut stream).await? {
+            // Consume the stream to completion
+            let _ = result;
+        }
+
+        Ok(())
+    }
+
     /// Prune unused images
     pub async fn prune_images(&self) -> Result<u64> {
         let options = PruneImagesOptions::<String> {

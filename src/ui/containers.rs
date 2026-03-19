@@ -1,21 +1,40 @@
 use anyhow::Result;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame,
 };
+use std::collections::HashSet;
 
 use crate::{
     docker::{containers::Container, DockerClient},
     events::Key,
+    theme::Theme,
+    widgets::modal::{ActionType, ConfirmationModal, PendingAction, Severity},
 };
 
-// Import our new Phase 2 components
+// Import our Phase 2 components
+use crate::ui::inspect_viewer::InspectViewer;
 use crate::ui::logs_viewer::LogsViewer;
 use crate::ui::search_filter::AdvancedSearch;
 use crate::ui::shell_executor::ShellExecutor;
 use crate::ui::stats_viewer::StatsViewer;
+use crate::ui::topology::TopologyViewer;
+
+/// Sort direction
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SortDirection {
+    Ascending,
+    Descending,
+}
+
+/// Sort state for table columns
+#[derive(Debug, Clone)]
+pub struct SortState {
+    pub column_index: usize,
+    pub direction: SortDirection,
+}
 
 /// Enhanced containers tab with Phase 2 features
 pub struct EnhancedContainersTab {
@@ -39,6 +58,20 @@ pub struct EnhancedContainersTab {
     stats_viewer: StatsViewer,
     /// Advanced search and filter
     search_filter: AdvancedSearch,
+    /// Inspect viewer
+    inspect_viewer: InspectViewer,
+    /// Topology viewer
+    topology_viewer: TopologyViewer,
+    /// Pending confirmation action
+    pending_action: Option<PendingAction>,
+    /// Whether compose grouping is enabled
+    compose_grouping: bool,
+    /// Color theme
+    theme: Theme,
+    /// Sort state
+    sort_state: SortState,
+    /// Selected containers for bulk operations
+    selected_containers: HashSet<String>,
 }
 
 /// Different view modes for the containers tab
@@ -48,6 +81,8 @@ pub enum ContainerViewMode {
     Logs,
     Shell,
     Stats,
+    Inspect,
+    Topology,
 }
 
 impl ContainerViewMode {
@@ -57,17 +92,21 @@ impl ContainerViewMode {
             ContainerViewMode::Logs => "Container Logs",
             ContainerViewMode::Shell => "Shell Access",
             ContainerViewMode::Stats => "Resource Stats",
+            ContainerViewMode::Inspect => "Container Inspect",
+            ContainerViewMode::Topology => "Network Topology",
         }
     }
 }
 
 impl EnhancedContainersTab {
     /// Create a new enhanced containers tab
-    pub async fn new(docker_client: DockerClient) -> Result<Self> {
+    pub async fn new(docker_client: DockerClient, theme: Theme) -> Result<Self> {
         let logs_viewer = LogsViewer::new(docker_client.clone());
         let shell_executor = ShellExecutor::new(docker_client.clone());
         let stats_viewer = StatsViewer::new(docker_client.clone());
         let search_filter = AdvancedSearch::new();
+        let inspect_viewer = InspectViewer::new(docker_client.clone());
+        let topology_viewer = TopologyViewer::new(docker_client.clone());
 
         let mut tab = Self {
             docker_client,
@@ -80,6 +119,16 @@ impl EnhancedContainersTab {
             shell_executor,
             stats_viewer,
             search_filter,
+            inspect_viewer,
+            topology_viewer,
+            pending_action: None,
+            compose_grouping: false,
+            theme,
+            sort_state: SortState {
+                column_index: 0,
+                direction: SortDirection::Ascending,
+            },
+            selected_containers: HashSet::new(),
         };
 
         // Load initial data
@@ -112,7 +161,6 @@ impl EnhancedContainersTab {
 
                 // Restore selection or select first item
                 if let Some(id) = selected_id {
-                    // Try to find the same container
                     let new_index = self.filtered_containers.iter().position(|c| c.id == id);
                     self.table_state.select(new_index.or(Some(0)));
                 } else if !self.filtered_containers.is_empty() {
@@ -141,19 +189,24 @@ impl EnhancedContainersTab {
     /// Apply current search and filter settings
     fn apply_filters(&mut self) {
         self.filtered_containers = self.search_filter.filter_containers(&self.all_containers);
+        self.apply_sort();
     }
 
     /// Handle key press events
     pub async fn handle_key(&mut self, key: Key) -> Result<()> {
-        // Handle view-specific keys first
+        // Handle confirmation modal first
+        if self.pending_action.is_some() {
+            self.handle_confirmation_key(key).await?;
+            return Ok(());
+        }
+
+        // Handle view-specific keys
         match self.view_mode {
             ContainerViewMode::List => {
                 // Handle search/filter keys
                 if self.search_filter.handle_key(key) {
                     if !self.search_filter.is_search_active() {
-                        // Search completed, apply filters
                         self.apply_filters();
-                        // Reset table selection
                         if !self.filtered_containers.is_empty() {
                             self.table_state.select(Some(0));
                         }
@@ -166,13 +219,37 @@ impl EnhancedContainersTab {
                     Key::Up => self.move_selection_up(),
                     Key::Down => self.move_selection_down(),
                     Key::Start => self.start_selected_container().await?,
-                    Key::Stop => self.stop_selected_container().await?,
+                    Key::Stop => self.confirm_stop_container(),
                     Key::Restart => self.restart_selected_container().await?,
-                    Key::DeleteItem => self.delete_selected_container().await?,
+                    Key::DeleteItem => self.confirm_delete_container(),
                     Key::Logs => self.enter_logs_view().await?,
                     Key::Exec => self.enter_shell_view().await?,
                     Key::Char('s') => self.enter_stats_view().await?,
                     Key::Char('i') => self.start_interactive_shell().await?,
+                    Key::Char('g') => {
+                        self.compose_grouping = !self.compose_grouping;
+                        self.status_message = Some(if self.compose_grouping {
+                            "Compose grouping enabled".to_string()
+                        } else {
+                            "Compose grouping disabled".to_string()
+                        });
+                    }
+                    Key::Enter => self.enter_inspect_view().await?,
+                    Key::Char('t') => self.enter_topology_view().await?,
+                    // Sort
+                    Key::Char('o') => self.cycle_sort_column(),
+                    Key::Char('O') => self.reverse_sort_direction(),
+                    // Bulk selection
+                    Key::Char(' ') => self.toggle_bulk_selection(),
+                    Key::Char('a') => self.select_all_visible(),
+                    Key::Char('A') => self.deselect_all(),
+                    // Bulk operations
+                    Key::Char('U') => self.confirm_bulk_start(),
+                    Key::Char('S') => self.confirm_bulk_stop(),
+                    Key::Char('X') => self.confirm_bulk_delete(),
+                    // Compose operations
+                    Key::Char('C') => self.compose_up_selected().await?,
+                    Key::Char('W') => self.compose_down_selected().await?,
                     _ => {}
                 }
             }
@@ -184,9 +261,8 @@ impl EnhancedContainersTab {
             },
             ContainerViewMode::Shell => {
                 if self.shell_executor.handle_key(key).await? {
-                    self.exit_to_list_view().await?; // Exit requested
+                    self.exit_to_list_view().await?;
                 }
-                // Continue in shell mode if false
             }
             ContainerViewMode::Stats => match key {
                 Key::Esc => self.exit_to_list_view().await?,
@@ -194,16 +270,167 @@ impl EnhancedContainersTab {
                     self.stats_viewer.handle_key(key).await?;
                 }
             },
+            ContainerViewMode::Inspect => match key {
+                Key::Esc => self.exit_to_list_view().await?,
+                _ => {
+                    self.inspect_viewer.handle_key(key).await?;
+                }
+            },
+            ContainerViewMode::Topology => match key {
+                Key::Esc => self.exit_to_list_view().await?,
+                _ => {
+                    self.topology_viewer.handle_key(key).await?;
+                }
+            },
         }
 
         Ok(())
     }
 
-    /// Handle raw key events for shell mode (bypasses key conversion)
+    /// Handle keys when confirmation modal is active
+    async fn handle_confirmation_key(&mut self, key: Key) -> Result<()> {
+        match key {
+            Key::Left | Key::Right => {
+                if let Some(ref mut pending) = self.pending_action {
+                    pending.toggle_selection();
+                }
+            }
+            Key::Enter => {
+                if let Some(pending) = self.pending_action.take() {
+                    if pending.confirm_selected {
+                        self.execute_confirmed_action(pending.action).await?;
+                    }
+                }
+            }
+            Key::Esc => {
+                self.pending_action = None;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Execute a confirmed action
+    async fn execute_confirmed_action(&mut self, action: ActionType) -> Result<()> {
+        match action {
+            ActionType::DeleteContainer { id, name } => {
+                match self.docker_client.remove_container(&id, false).await {
+                    Ok(_) => {
+                        self.status_message = Some(format!("Deleted container '{}'", name));
+                        self.refresh().await?;
+                    }
+                    Err(e) => {
+                        self.status_message =
+                            Some(format!("Failed to delete '{}': {}", name, e));
+                    }
+                }
+            }
+            ActionType::StopContainer { id, name } => {
+                match self.docker_client.stop_container(&id).await {
+                    Ok(_) => {
+                        self.status_message = Some(format!("Stopped container '{}'", name));
+                        self.refresh().await?;
+                    }
+                    Err(e) => {
+                        self.status_message =
+                            Some(format!("Failed to stop '{}': {}", name, e));
+                    }
+                }
+            }
+            ActionType::BulkStart { ids } => {
+                let mut ok = 0;
+                let mut fail = 0;
+                for id in &ids {
+                    match self.docker_client.start_container(id).await {
+                        Ok(_) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                self.selected_containers.clear();
+                self.status_message = Some(format!("Started {ok}, failed {fail}"));
+                self.refresh().await?;
+            }
+            ActionType::BulkStop { ids } => {
+                let mut ok = 0;
+                let mut fail = 0;
+                for id in &ids {
+                    match self.docker_client.stop_container(id).await {
+                        Ok(_) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                self.selected_containers.clear();
+                self.status_message = Some(format!("Stopped {ok}, failed {fail}"));
+                self.refresh().await?;
+            }
+            ActionType::BulkDelete { ids } => {
+                let mut ok = 0;
+                let mut fail = 0;
+                for id in &ids {
+                    match self.docker_client.remove_container(id, false).await {
+                        Ok(_) => ok += 1,
+                        Err(_) => fail += 1,
+                    }
+                }
+                self.selected_containers.clear();
+                self.status_message = Some(format!("Deleted {ok}, failed {fail}"));
+                self.refresh().await?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Confirm stop container action
+    fn confirm_stop_container(&mut self) {
+        if let Some(container) = self.get_selected_container() {
+            let id = container.id.clone();
+            let name = container.name.clone();
+
+            if container.state != crate::docker::containers::ContainerState::Running {
+                self.status_message = Some(format!("Container '{}' is not running", name));
+                return;
+            }
+
+            self.pending_action = Some(PendingAction::new(
+                "Stop Container".to_string(),
+                format!("Stop container '{}'? This will send SIGTERM.", name),
+                Severity::Warning,
+                ActionType::StopContainer { id, name },
+            ));
+        }
+    }
+
+    /// Confirm delete container action
+    fn confirm_delete_container(&mut self) {
+        if let Some(container) = self.get_selected_container() {
+            let id = container.id.clone();
+            let name = container.name.clone();
+
+            if container.state == crate::docker::containers::ContainerState::Running {
+                self.status_message = Some(format!(
+                    "Cannot delete running container '{}'. Stop it first.",
+                    name
+                ));
+                return;
+            }
+
+            self.pending_action = Some(PendingAction::new(
+                "Delete Container".to_string(),
+                format!(
+                    "Permanently delete container '{}'? This cannot be undone.",
+                    name
+                ),
+                Severity::Danger,
+                ActionType::DeleteContainer { id, name },
+            ));
+        }
+    }
+
+    /// Handle raw key events for shell mode
     pub async fn handle_shell_key_raw(&mut self, key: Key) -> Result<bool> {
         match self.view_mode {
             ContainerViewMode::Shell => {
-                // Convert action keys back to characters for shell input
                 let shell_key = match key {
                     Key::Cheatsheet => Key::Char('c'),
                     Key::Logs => Key::Char('l'),
@@ -212,19 +439,18 @@ impl EnhancedContainersTab {
                     Key::Start => Key::Char('u'),
                     Key::Exec => Key::Char('e'),
                     Key::Prune => Key::Char('p'),
-                    // Keep other keys as they are
                     _ => key,
                 };
 
                 match self.shell_executor.handle_key(shell_key).await? {
                     true => {
                         self.exit_to_list_view().await?;
-                        Ok(true) // Exit requested
+                        Ok(true)
                     }
-                    false => Ok(false), // Continue in shell mode
+                    false => Ok(false),
                 }
             }
-            _ => Ok(false), // Not in shell mode
+            _ => Ok(false),
         }
     }
 
@@ -235,12 +461,18 @@ impl EnhancedContainersTab {
             ContainerViewMode::Logs => self.logs_viewer.draw(frame, area),
             ContainerViewMode::Shell => self.shell_executor.draw(frame, area),
             ContainerViewMode::Stats => self.stats_viewer.draw(frame, area),
+            ContainerViewMode::Inspect => self.inspect_viewer.draw(frame, area),
+            ContainerViewMode::Topology => self.topology_viewer.draw(frame, area),
+        }
+
+        // Draw confirmation modal on top if active
+        if let Some(ref pending) = self.pending_action {
+            ConfirmationModal::draw(frame, area, pending);
         }
     }
 
     /// Draw the container list view with search/filter
     fn draw_list_view(&mut self, frame: &mut Frame, area: Rect) {
-        // Split area for search controls and table
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -249,34 +481,139 @@ impl EnhancedContainersTab {
             ])
             .split(area);
 
-        // Draw search and filter controls
         self.search_filter.draw(frame, chunks[0]);
 
-        // Draw container table
-        self.draw_container_table(frame, chunks[1]);
+        if self.compose_grouping {
+            self.draw_grouped_table(frame, chunks[1]);
+        } else {
+            self.draw_container_table(frame, chunks[1]);
+        }
+    }
+
+    /// Draw the container table with compose grouping
+    fn draw_grouped_table(&mut self, frame: &mut Frame, area: Rect) {
+        let t = &self.theme;
+        // Group containers by compose project
+        let mut groups: Vec<(String, Vec<&Container>)> = Vec::new();
+        let mut standalone: Vec<&Container> = Vec::new();
+
+        let mut project_map: std::collections::BTreeMap<String, Vec<&Container>> =
+            std::collections::BTreeMap::new();
+
+        for container in &self.filtered_containers {
+            if let Some(ref project) = container.compose_project {
+                project_map
+                    .entry(project.clone())
+                    .or_default()
+                    .push(container);
+            } else {
+                standalone.push(container);
+            }
+        }
+
+        for (project, containers) in project_map {
+            groups.push((project, containers));
+        }
+        if !standalone.is_empty() {
+            groups.push(("Standalone".to_string(), standalone));
+        }
+
+        let mut rows: Vec<Row> = Vec::new();
+
+        for (group_name, containers) in &groups {
+            rows.push(
+                Row::new(vec![
+                    Cell::from(""),
+                    Cell::from(""),
+                    Cell::from(format!("--- {} ({}) ---", group_name, containers.len())),
+                    Cell::from(""),
+                    Cell::from(""),
+                    Cell::from(""),
+                    Cell::from(""),
+                ])
+                .style(
+                    Style::default()
+                        .fg(t.title_3)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            );
+
+            for container in containers {
+                let style = container_row_style(container, t);
+                let checkbox = if self.selected_containers.contains(&container.id) {
+                    "[x]"
+                } else {
+                    "[ ]"
+                };
+
+                let service_name = container
+                    .compose_service
+                    .as_deref()
+                    .map(|s| format!(" [{}]", s))
+                    .unwrap_or_default();
+
+                rows.push(
+                    Row::new(vec![
+                        Cell::from(checkbox.to_string()),
+                        Cell::from(container.id.clone()),
+                        Cell::from(format!("{}{}", container.name, service_name)),
+                        Cell::from(container.image.clone()),
+                        Cell::from(container.state.display()),
+                        Cell::from(container.ports.clone()),
+                        Cell::from(container.created.clone()),
+                    ])
+                    .style(style),
+                );
+            }
+        }
+
+        let header = self.table_header_with_sort();
+        let title = self.build_title();
+
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(3),
+                Constraint::Length(12),
+                Constraint::Length(25),
+                Constraint::Length(25),
+                Constraint::Length(15),
+                Constraint::Length(15),
+                Constraint::Length(20),
+            ],
+        )
+        .header(header)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(format!("{} [grouped]", title)),
+        )
+        .row_highlight_style(
+            Style::default()
+                .bg(t.highlight_bg)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">> ");
+
+        frame.render_stateful_widget(table, area, &mut self.table_state);
     }
 
     /// Draw the container table
     fn draw_container_table(&mut self, frame: &mut Frame, area: Rect) {
-        // Create table rows
+        let t = &self.theme;
         let rows: Vec<Row> = self
             .filtered_containers
             .iter()
             .map(|container| {
-                let style = match container.state {
-                    crate::docker::containers::ContainerState::Running => {
-                        Style::default().fg(Color::Green)
-                    }
-                    crate::docker::containers::ContainerState::Stopped => {
-                        Style::default().fg(Color::Red)
-                    }
-                    crate::docker::containers::ContainerState::Paused => {
-                        Style::default().fg(Color::Yellow)
-                    }
-                    _ => Style::default().fg(Color::Gray),
+                let style = container_row_style(container, t);
+                let checkbox = if self.selected_containers.contains(&container.id) {
+                    "[x]"
+                } else {
+                    "[ ]"
                 };
 
                 Row::new(vec![
+                    Cell::from(checkbox.to_string()),
                     Cell::from(container.id.clone()),
                     Cell::from(container.name.clone()),
                     Cell::from(container.image.clone()),
@@ -288,17 +625,56 @@ impl EnhancedContainersTab {
             })
             .collect();
 
-        // Create table headers
-        let header = Row::new(vec![
-            Cell::from("ID").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Name").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Image").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Status").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Ports").style(Style::default().add_modifier(Modifier::BOLD)),
-            Cell::from("Created").style(Style::default().add_modifier(Modifier::BOLD)),
-        ]);
+        let header = self.table_header_with_sort();
+        let title = self.build_title();
 
-        // Build the title string
+        let table = Table::new(
+            rows,
+            [
+                Constraint::Length(3),
+                Constraint::Length(12),
+                Constraint::Length(20),
+                Constraint::Length(25),
+                Constraint::Length(15),
+                Constraint::Length(15),
+                Constraint::Length(20),
+            ],
+        )
+        .header(header)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .row_highlight_style(
+            Style::default()
+                .bg(t.highlight_bg)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">> ");
+
+        frame.render_stateful_widget(table, area, &mut self.table_state);
+    }
+
+    fn table_header_with_sort(&self) -> Row<'static> {
+        let columns = ["", "ID", "Name", "Image", "Status", "Ports", "Created"];
+        let cells: Vec<Cell> = columns
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                // Sort column index is offset by 1 because of checkbox column
+                let label = if i > 0 && i - 1 == self.sort_state.column_index {
+                    let arrow = match self.sort_state.direction {
+                        SortDirection::Ascending => " ^",
+                        SortDirection::Descending => " v",
+                    };
+                    format!("{}{}", name, arrow)
+                } else {
+                    name.to_string()
+                };
+                Cell::from(label).style(Style::default().add_modifier(Modifier::BOLD))
+            })
+            .collect();
+        Row::new(cells)
+    }
+
+    fn build_title(&self) -> String {
         let total_count = self.all_containers.len();
         let filtered_count = self.filtered_containers.len();
         let running_count = self
@@ -320,48 +696,31 @@ impl EnhancedContainersTab {
             )
         };
 
-        let title = if let Some(ref message) = self.status_message {
+        if let Some(ref message) = self.status_message {
             format!("{} - {}", title_text, message)
         } else {
             title_text
-        };
-
-        // Create the table widget
-        let table = Table::new(
-            rows,
-            [
-                Constraint::Length(12), // ID
-                Constraint::Length(20), // Name
-                Constraint::Length(25), // Image
-                Constraint::Length(15), // Status
-                Constraint::Length(15), // Ports
-                Constraint::Length(20), // Created
-            ],
-        )
-        .header(header)
-        .block(Block::default().borders(Borders::ALL).title(title))
-        .row_highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(">> ");
-
-        // Render the table
-        frame.render_stateful_widget(table, area, &mut self.table_state);
-
-        // Draw additional help info if not searching
-        if !self.search_filter.is_search_active() {
-            self.draw_help_footer(frame, area);
         }
     }
 
-    /// Draw help information at the bottom
-    fn draw_help_footer(&self, _frame: &mut Frame, _area: Rect) {
-        // This would overlay help text at the bottom of the table area
-        // For brevity, we'll skip the implementation here
-        // but it would show key shortcuts like:
-        // "l: Logs | e: Shell | s: Stats | i: Interactive | /: Search | f: Filter"
+    /// Enter inspect view for selected container
+    async fn enter_inspect_view(&mut self) -> Result<()> {
+        if let Some(container) = self.get_selected_container().cloned() {
+            self.inspect_viewer.inspect(container).await?;
+            self.view_mode = ContainerViewMode::Inspect;
+            self.status_message = None;
+        } else {
+            self.status_message = Some("No container selected".to_string());
+        }
+        Ok(())
+    }
+
+    /// Enter topology view
+    async fn enter_topology_view(&mut self) -> Result<()> {
+        self.topology_viewer.load().await?;
+        self.view_mode = ContainerViewMode::Topology;
+        self.status_message = None;
+        Ok(())
     }
 
     /// Enter logs view for selected container
@@ -400,7 +759,7 @@ impl EnhancedContainersTab {
         Ok(())
     }
 
-    /// Start interactive shell (drops out of TUI temporarily)
+    /// Start interactive shell
     async fn start_interactive_shell(&mut self) -> Result<()> {
         if let Some(container) = self.get_selected_container() {
             self.shell_executor
@@ -414,7 +773,6 @@ impl EnhancedContainersTab {
 
     /// Exit back to list view
     async fn exit_to_list_view(&mut self) -> Result<()> {
-        // Stop any active monitoring/streaming
         match self.view_mode {
             ContainerViewMode::Logs => {
                 self.logs_viewer.stop_logs().await;
@@ -482,25 +840,6 @@ impl EnhancedContainersTab {
         Ok(())
     }
 
-    /// Stop the selected container
-    async fn stop_selected_container(&mut self) -> Result<()> {
-        if let Some(container) = self.get_selected_container() {
-            let id = container.id.clone();
-            let name = container.name.clone();
-
-            match self.docker_client.stop_container(&id).await {
-                Ok(_) => {
-                    self.status_message = Some(format!("Stopped container '{}'", name));
-                    self.refresh().await?;
-                }
-                Err(e) => {
-                    self.status_message = Some(format!("Failed to stop '{}': {}", name, e));
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Restart the selected container
     async fn restart_selected_container(&mut self) -> Result<()> {
         if let Some(container) = self.get_selected_container() {
@@ -520,30 +859,52 @@ impl EnhancedContainersTab {
         Ok(())
     }
 
-    /// Delete the selected container
-    async fn delete_selected_container(&mut self) -> Result<()> {
-        if let Some(container) = self.get_selected_container() {
-            let id = container.id.clone();
-            let name = container.name.clone();
+    /// Start all containers in the selected container's compose project
+    async fn compose_up_selected(&mut self) -> Result<()> {
+        let project = self
+            .get_selected_container()
+            .and_then(|c| c.compose_project.clone());
 
-            // For safety, only allow deletion of stopped containers
-            if container.state == crate::docker::containers::ContainerState::Running {
-                self.status_message = Some(format!(
-                    "Cannot delete running container '{}'. Stop it first.",
-                    name
-                ));
-                return Ok(());
-            }
-
-            match self.docker_client.remove_container(&id, false).await {
-                Ok(_) => {
-                    self.status_message = Some(format!("Deleted container '{}'", name));
+        if let Some(project) = project {
+            match self.docker_client.compose_up(&project).await {
+                Ok((ok, fail)) => {
+                    self.status_message = Some(format!(
+                        "Compose up '{}': started {}, failed {}",
+                        project, ok, fail
+                    ));
                     self.refresh().await?;
                 }
                 Err(e) => {
-                    self.status_message = Some(format!("Failed to delete '{}': {}", name, e));
+                    self.status_message = Some(format!("Compose up failed: {}", e));
                 }
             }
+        } else {
+            self.status_message = Some("Selected container is not part of a compose project".to_string());
+        }
+        Ok(())
+    }
+
+    /// Stop all containers in the selected container's compose project
+    async fn compose_down_selected(&mut self) -> Result<()> {
+        let project = self
+            .get_selected_container()
+            .and_then(|c| c.compose_project.clone());
+
+        if let Some(project) = project {
+            match self.docker_client.compose_down(&project).await {
+                Ok((ok, fail)) => {
+                    self.status_message = Some(format!(
+                        "Compose down '{}': stopped {}, failed {}",
+                        project, ok, fail
+                    ));
+                    self.refresh().await?;
+                }
+                Err(e) => {
+                    self.status_message = Some(format!("Compose down failed: {}", e));
+                }
+            }
+        } else {
+            self.status_message = Some("Selected container is not part of a compose project".to_string());
         }
         Ok(())
     }
@@ -578,6 +939,14 @@ impl EnhancedContainersTab {
                     Some("Resource stats".to_string())
                 }
             }
+            ContainerViewMode::Inspect => {
+                if let Some(container) = self.inspect_viewer.get_container() {
+                    Some(format!("Inspecting '{}'", container.name))
+                } else {
+                    Some("Container inspect".to_string())
+                }
+            }
+            ContainerViewMode::Topology => Some("Network topology view".to_string()),
         }
     }
 
@@ -586,11 +955,147 @@ impl EnhancedContainersTab {
         self.view_mode != ContainerViewMode::List
     }
 
-    /// Force exit from any sub-view (useful for global navigation)
+    /// Force exit from any sub-view
     pub async fn force_exit_subview(&mut self) -> Result<()> {
         if self.is_in_subview() {
             self.exit_to_list_view().await?;
         }
         Ok(())
+    }
+
+    /// Select a specific row (for mouse click)
+    pub fn select_row(&mut self, index: usize) {
+        if index < self.filtered_containers.len() {
+            self.table_state.select(Some(index));
+        }
+    }
+
+    /// Scroll up one row (for mouse scroll)
+    pub fn scroll_up(&mut self) {
+        self.move_selection_up();
+    }
+
+    /// Scroll down one row (for mouse scroll)
+    pub fn scroll_down(&mut self) {
+        self.move_selection_down();
+    }
+
+    /// Apply current sort to filtered containers
+    fn apply_sort(&mut self) {
+        let col = self.sort_state.column_index;
+        let desc = self.sort_state.direction == SortDirection::Descending;
+        self.filtered_containers.sort_by(|a, b| {
+            let cmp = match col {
+                0 => a.id.to_lowercase().cmp(&b.id.to_lowercase()),
+                1 => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+                2 => a.image.to_lowercase().cmp(&b.image.to_lowercase()),
+                3 => a.state.display().to_lowercase().cmp(&b.state.display().to_lowercase()),
+                4 => a.ports.to_lowercase().cmp(&b.ports.to_lowercase()),
+                5 => a.created.cmp(&b.created),
+                _ => std::cmp::Ordering::Equal,
+            };
+            if desc { cmp.reverse() } else { cmp }
+        });
+    }
+
+    /// Cycle sort column forward
+    fn cycle_sort_column(&mut self) {
+        self.sort_state.column_index = (self.sort_state.column_index + 1) % 6;
+        self.apply_sort();
+    }
+
+    /// Reverse sort direction
+    fn reverse_sort_direction(&mut self) {
+        self.sort_state.direction = match self.sort_state.direction {
+            SortDirection::Ascending => SortDirection::Descending,
+            SortDirection::Descending => SortDirection::Ascending,
+        };
+        self.apply_sort();
+    }
+
+    /// Toggle bulk selection on current row
+    fn toggle_bulk_selection(&mut self) {
+        if let Some(container) = self.get_selected_container() {
+            let id = container.id.clone();
+            if self.selected_containers.contains(&id) {
+                self.selected_containers.remove(&id);
+            } else {
+                self.selected_containers.insert(id);
+            }
+            // Move selection down after toggling
+            self.move_selection_down();
+        }
+    }
+
+    /// Select all visible containers
+    fn select_all_visible(&mut self) {
+        for container in &self.filtered_containers {
+            self.selected_containers.insert(container.id.clone());
+        }
+    }
+
+    /// Deselect all containers
+    fn deselect_all(&mut self) {
+        self.selected_containers.clear();
+    }
+
+    /// Confirm bulk stop
+    fn confirm_bulk_stop(&mut self) {
+        if self.selected_containers.is_empty() {
+            self.status_message = Some("No containers selected".to_string());
+            return;
+        }
+        let count = self.selected_containers.len();
+        self.pending_action = Some(PendingAction::new(
+            "Bulk Stop".to_string(),
+            format!("Stop {} selected containers?", count),
+            Severity::Warning,
+            ActionType::BulkStop {
+                ids: self.selected_containers.iter().cloned().collect(),
+            },
+        ));
+    }
+
+    /// Confirm bulk delete
+    fn confirm_bulk_delete(&mut self) {
+        if self.selected_containers.is_empty() {
+            self.status_message = Some("No containers selected".to_string());
+            return;
+        }
+        let count = self.selected_containers.len();
+        self.pending_action = Some(PendingAction::new(
+            "Bulk Delete".to_string(),
+            format!("Delete {} selected containers? This cannot be undone.", count),
+            Severity::Danger,
+            ActionType::BulkDelete {
+                ids: self.selected_containers.iter().cloned().collect(),
+            },
+        ));
+    }
+
+    /// Confirm bulk start
+    fn confirm_bulk_start(&mut self) {
+        if self.selected_containers.is_empty() {
+            self.status_message = Some("No containers selected".to_string());
+            return;
+        }
+        let count = self.selected_containers.len();
+        self.pending_action = Some(PendingAction::new(
+            "Bulk Start".to_string(),
+            format!("Start {} selected containers?", count),
+            Severity::Normal,
+            ActionType::BulkStart {
+                ids: self.selected_containers.iter().cloned().collect(),
+            },
+        ));
+    }
+}
+
+fn container_row_style(container: &Container, theme: &Theme) -> Style {
+    match container.state {
+        crate::docker::containers::ContainerState::Running => Style::default().fg(theme.success),
+        crate::docker::containers::ContainerState::Stopped => Style::default().fg(theme.error),
+        crate::docker::containers::ContainerState::Paused => Style::default().fg(theme.warning),
+        _ => Style::default().fg(theme.muted),
     }
 }

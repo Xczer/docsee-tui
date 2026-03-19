@@ -1,12 +1,13 @@
 use anyhow::Result;
 use crossterm::{
+    event::{DisableMouseCapture, EnableMouseCapture},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand,
 };
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame, Terminal,
@@ -14,9 +15,14 @@ use ratatui::{
 use std::io::{self, stdout};
 
 use crate::{
+    config::AppConfig,
     docker::DockerClient,
     events::{AppEvent, EventConfig, EventHandler},
-    ui::{cheatsheet::CheatSheet, images::ImagesTab, networks::NetworksTab, volumes::VolumesTab},
+    theme::Theme,
+    ui::{
+        cheatsheet::CheatSheet, images::ImagesTab, networks::NetworksTab, system::SystemTab,
+        volumes::VolumesTab,
+    },
 };
 
 // Import our enhanced containers tab
@@ -45,10 +51,19 @@ pub struct App {
     volumes_tab: VolumesTab,
     /// The networks tab (existing)
     networks_tab: NetworksTab,
+    /// The system dashboard tab
+    system_tab: SystemTab,
     /// The cheatsheet modal (existing)
     cheatsheet: CheatSheet,
     /// Status message to display globally
     global_status: Option<String>,
+    /// Color theme
+    theme: Theme,
+    /// Whether mouse support is enabled
+    mouse_enabled: bool,
+    /// Stored layout rects for mouse hit-testing
+    nav_area: Option<Rect>,
+    content_area: Option<Rect>,
 }
 
 /// Available tabs in the application
@@ -58,6 +73,7 @@ pub enum TabType {
     Images,
     Volumes,
     Networks,
+    System,
 }
 
 impl TabType {
@@ -68,6 +84,7 @@ impl TabType {
             TabType::Images,
             TabType::Volumes,
             TabType::Networks,
+            TabType::System,
         ]
     }
 
@@ -78,6 +95,7 @@ impl TabType {
             TabType::Images => "Images",
             TabType::Volumes => "Volumes",
             TabType::Networks => "Networks",
+            TabType::System => "System",
         }
     }
 
@@ -88,6 +106,7 @@ impl TabType {
             TabType::Images => "Docker Image Management",
             TabType::Volumes => "Docker Volume Management",
             TabType::Networks => "Docker Network Management",
+            TabType::System => "Docker System Dashboard",
         }
     }
 
@@ -114,23 +133,35 @@ impl TabType {
 
 impl App {
     /// Create a new enhanced application instance
-    pub async fn new(docker_host: &str) -> Result<Self> {
-        let docker_client = DockerClient::new(docker_host).await?;
-        let event_handler = EventHandler::new(EventConfig::default());
+    pub async fn new(config: &AppConfig, theme: Theme) -> Result<Self> {
+        let docker_client = DockerClient::new(&config.general.docker_host).await?;
+        let event_config = EventConfig {
+            tick_rate: std::time::Duration::from_millis(config.general.tick_rate_ms),
+            ..EventConfig::default()
+        };
+        let event_handler = EventHandler::new(event_config);
 
-        // Create the enhanced containers tab
-        let containers_tab = EnhancedContainersTab::new(docker_client.clone()).await?;
+        let default_tab = match config.general.default_tab.to_lowercase().as_str() {
+            "images" => TabType::Images,
+            "volumes" => TabType::Volumes,
+            "networks" => TabType::Networks,
+            "system" => TabType::System,
+            _ => TabType::Containers,
+        };
 
-        // Create other tabs (existing implementation)
-        let images_tab = ImagesTab::new(docker_client.clone()).await?;
-        let volumes_tab = VolumesTab::new(docker_client.clone()).await?;
-        let networks_tab = NetworksTab::new(docker_client.clone()).await?;
+        // Create all tabs
+        let containers_tab = EnhancedContainersTab::new(docker_client.clone(), theme.clone()).await?;
+        let images_tab = ImagesTab::new(docker_client.clone(), theme.clone()).await?;
+        let volumes_tab = VolumesTab::new(docker_client.clone(), theme.clone()).await?;
+        let networks_tab = NetworksTab::new(docker_client.clone(), theme.clone()).await?;
+        let system_tab = SystemTab::new(docker_client.clone(), theme.clone()).await?;
         let cheatsheet = CheatSheet::new();
+        let mouse_enabled = config.mouse.enabled;
 
         Ok(Self {
             docker_client,
             event_handler,
-            current_tab: TabType::Containers,
+            current_tab: default_tab,
             should_quit: false,
             show_cheatsheet: false,
             in_container_subview: false,
@@ -138,8 +169,13 @@ impl App {
             images_tab,
             volumes_tab,
             networks_tab,
+            system_tab,
             cheatsheet,
             global_status: None,
+            theme,
+            mouse_enabled,
+            nav_area: None,
+            content_area: None,
         })
     }
 
@@ -148,16 +184,22 @@ impl App {
         // Setup terminal
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
+        if self.mouse_enabled {
+            stdout().execute(EnableMouseCapture)?;
+        }
         let backend = CrosstermBackend::new(stdout());
         let mut terminal = Terminal::new(backend)?;
 
         // Show welcome message
-        self.global_status = Some("🦆 Welcome to Docsee v1.0! Real-time logs, Shell access, Stats monitoring, Advanced search".to_string());
+        self.global_status = Some("Welcome to Docsee v2.0! Inspect, Topology, Compose groups, System dashboard".to_string());
 
         // Main application loop
         let result = self.main_loop(&mut terminal).await;
 
         // Cleanup terminal
+        if self.mouse_enabled {
+            stdout().execute(DisableMouseCapture)?;
+        }
         disable_raw_mode()?;
         stdout().execute(LeaveAlternateScreen)?;
 
@@ -179,8 +221,10 @@ impl App {
                     AppEvent::Key(key) => {
                         self.handle_key_event(key).await?;
                     }
+                    AppEvent::Mouse(mouse_event) => {
+                        self.handle_mouse_event(mouse_event);
+                    }
                     AppEvent::Tick => {
-                        // Periodic updates (refresh data, etc.)
                         self.handle_tick().await?;
                     }
                     AppEvent::Quit => {
@@ -214,7 +258,7 @@ impl App {
             return Ok(());
         }
 
-        // Check if we're in a container sub-view (logs, shell, stats)
+        // Check if we're in a container sub-view (logs, shell, stats, inspect, topology)
         self.in_container_subview =
             self.current_tab == TabType::Containers && self.containers_tab.is_in_subview();
 
@@ -222,13 +266,10 @@ impl App {
         if self.in_container_subview
             && self.containers_tab.get_view_mode() == &ContainerViewMode::Shell
         {
-            // In shell mode, handle the key directly without converting to actions
             let shell_exit = self.containers_tab.handle_shell_key_raw(key).await?;
             if shell_exit {
-                // Shell requested exit, this will update the view mode
                 return Ok(());
             }
-            // Don't process any other global keys in shell mode
             return Ok(());
         }
 
@@ -254,10 +295,8 @@ impl App {
                 _ => {}
             }
         } else {
-            // In non-shell sub-view, allow some global keys
             match key {
                 Key::Quit => {
-                    // Force exit sub-view first, then quit
                     self.containers_tab.force_exit_subview().await?;
                     self.should_quit = true;
                     return Ok(());
@@ -266,7 +305,6 @@ impl App {
                     self.show_cheatsheet = true;
                     return Ok(());
                 }
-                // Tab navigation is disabled in sub-views for safety
                 _ => {}
             }
         }
@@ -285,30 +323,104 @@ impl App {
             TabType::Networks => {
                 self.networks_tab.handle_key(key).await?;
             }
+            TabType::System => {
+                self.system_tab.handle_key(key).await?;
+            }
         }
 
         Ok(())
     }
 
-    /// Handle periodic tick events
+    /// Handle periodic tick events - catches Docker disconnects gracefully
     async fn handle_tick(&mut self) -> Result<()> {
-        // Refresh current tab data
-        match self.current_tab {
-            TabType::Containers => {
-                self.containers_tab.refresh().await?;
+        let result = match self.current_tab {
+            TabType::Containers => self.containers_tab.refresh().await,
+            TabType::Images => self.images_tab.refresh().await,
+            TabType::Volumes => self.volumes_tab.refresh().await,
+            TabType::Networks => self.networks_tab.refresh().await,
+            TabType::System => self.system_tab.refresh().await,
+        };
+
+        if let Err(e) = result {
+            let msg = format!("{}", e);
+            if msg.contains("connection") || msg.contains("refused") || msg.contains("daemon") || msg.contains("socket") {
+                self.global_status = Some("Docker disconnected - reconnect Docker and press any key".to_string());
             }
-            TabType::Images => {
-                self.images_tab.refresh().await?;
-            }
-            TabType::Volumes => {
-                self.volumes_tab.refresh().await?;
-            }
-            TabType::Networks => {
-                self.networks_tab.refresh().await?;
-            }
+            // Don't propagate - just show the error, keep the app alive
         }
 
         Ok(())
+    }
+
+    /// Handle mouse events
+    fn handle_mouse_event(&mut self, mouse_event: crossterm::event::MouseEvent) {
+        use crossterm::event::{MouseEventKind, MouseButton};
+
+        let col = mouse_event.column;
+        let row = mouse_event.row;
+
+        match mouse_event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                // Check nav area click for tab switching
+                if let Some(nav) = self.nav_area {
+                    if row >= nav.y && row < nav.y + nav.height && col >= nav.x && col < nav.x + nav.width {
+                        // Divide into 3 equal sections for prev/current/next
+                        let third = nav.width / 3;
+                        if col < nav.x + third {
+                            self.current_tab = self.current_tab.previous();
+                        } else if col >= nav.x + third * 2 {
+                            self.current_tab = self.current_tab.next();
+                        }
+                        return;
+                    }
+                }
+
+                // Check content area click for row selection
+                if let Some(content) = self.content_area {
+                    if row >= content.y && row < content.y + content.height {
+                        let clicked_row = (row - content.y) as usize;
+                        // Subtract header rows (border + header + border = ~3 rows)
+                        if clicked_row >= 3 {
+                            let item_index = clicked_row - 3;
+                            match self.current_tab {
+                                TabType::Containers => {
+                                    self.containers_tab.select_row(item_index);
+                                }
+                                TabType::Images => {
+                                    self.images_tab.select_row(item_index);
+                                }
+                                TabType::Volumes => {
+                                    self.volumes_tab.select_row(item_index);
+                                }
+                                TabType::Networks => {
+                                    self.networks_tab.select_row(item_index);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+            MouseEventKind::ScrollUp => {
+                match self.current_tab {
+                    TabType::Containers => self.containers_tab.scroll_up(),
+                    TabType::Images => self.images_tab.scroll_up(),
+                    TabType::Volumes => self.volumes_tab.scroll_up(),
+                    TabType::Networks => self.networks_tab.scroll_up(),
+                    _ => {}
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                match self.current_tab {
+                    TabType::Containers => self.containers_tab.scroll_down(),
+                    TabType::Images => self.images_tab.scroll_down(),
+                    TabType::Volumes => self.volumes_tab.scroll_down(),
+                    TabType::Networks => self.networks_tab.scroll_down(),
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Draw the user interface
@@ -325,6 +437,10 @@ impl App {
                 Constraint::Length(1), // Footer
             ])
             .split(size);
+
+        // Store layout rects for mouse hit-testing
+        self.nav_area = Some(chunks[1]);
+        self.content_area = Some(chunks[2]);
 
         // Draw ASCII art title
         self.draw_ascii_title(frame, chunks[0]);
@@ -349,6 +465,9 @@ impl App {
                 TabType::Networks => {
                     self.networks_tab.draw(frame, chunks[2]);
                 }
+                TabType::System => {
+                    self.system_tab.draw(frame, chunks[2]);
+                }
             }
         }
 
@@ -358,37 +477,38 @@ impl App {
 
     /// Draw ASCII art title
     fn draw_ascii_title(&mut self, frame: &mut Frame, area: Rect) {
+        let t = &self.theme;
         let ascii_art = vec![
             Line::from(Span::styled(
                 "██████╗  ██████╗  ██████╗███████╗███████╗███████╗",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(t.title_1)
                     .add_modifier(Modifier::BOLD),
             )),
             Line::from(Span::styled(
                 "██╔══██╗██╔═══██╗██╔════╝██╔════╝██╔════╝██╔════╝",
-                Style::default().fg(Color::Cyan),
+                Style::default().fg(t.title_1),
             )),
             Line::from(Span::styled(
                 "██║  ██║██║   ██║██║     ███████╗█████╗  █████╗  ",
-                Style::default().fg(Color::Blue),
+                Style::default().fg(t.title_2),
             )),
             Line::from(Span::styled(
                 "██║  ██║██║   ██║██║     ╚════██║██╔══╝  ██╔══╝  ",
-                Style::default().fg(Color::Blue),
+                Style::default().fg(t.title_2),
             )),
             Line::from(Span::styled(
                 "██████╔╝╚██████╔╝╚██████╗███████║███████╗███████╗",
-                Style::default().fg(Color::Magenta),
+                Style::default().fg(t.title_3),
             )),
             Line::from(Span::styled(
                 "╚═════╝  ╚═════╝  ╚═════╝╚══════╝╚══════╝╚══════╝",
-                Style::default().fg(Color::Magenta),
+                Style::default().fg(t.title_3),
             )),
             Line::from(Span::styled(
-                "            🦆 Docker Management TUI v1.0",
+                "            Docker Management TUI v2.0",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(t.accent)
                     .add_modifier(Modifier::ITALIC),
             )),
         ];
@@ -398,7 +518,7 @@ impl App {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::DarkGray)),
+                    .border_style(Style::default().fg(t.border)),
             );
 
         frame.render_widget(title_paragraph, area);
@@ -406,20 +526,22 @@ impl App {
 
     /// Draw the navigation header with prev/current/next tabs
     fn draw_navigation_header(&mut self, frame: &mut Frame, area: Rect) {
+        let t = &self.theme;
+
         // Don't show navigation in sub-views to avoid confusion
         if self.in_container_subview {
             let sub_view_info_line = Line::from(vec![
-                Span::styled("📍 ", Style::default().fg(Color::Yellow)),
+                Span::styled(">> ", Style::default().fg(t.accent)),
                 Span::styled(
                     self.containers_tab.get_view_mode().name(),
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(t.accent)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" - Press "),
                 Span::styled(
                     "Esc",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default().fg(t.error).add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(" to return to main view"),
             ]);
@@ -447,8 +569,8 @@ impl App {
 
         // Draw previous tab (left)
         let prev_text = Line::from(vec![
-            Span::styled("← ", Style::default().fg(Color::Gray)),
-            Span::styled(prev_tab.name(), Style::default().fg(Color::Gray)),
+            Span::styled("<- ", Style::default().fg(t.muted)),
+            Span::styled(prev_tab.name(), Style::default().fg(t.muted)),
         ]);
         let prev_paragraph = Paragraph::new(prev_text)
             .alignment(Alignment::Left)
@@ -460,13 +582,13 @@ impl App {
             Line::from(vec![Span::styled(
                 self.current_tab.name(),
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(t.accent)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(vec![Span::styled(
                 self.current_tab.info(),
                 Style::default()
-                    .fg(Color::White)
+                    .fg(t.fg)
                     .add_modifier(Modifier::ITALIC),
             )]),
         ];
@@ -475,14 +597,14 @@ impl App {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow)),
+                    .border_style(Style::default().fg(t.border_focused)),
             );
         frame.render_widget(current_paragraph, nav_chunks[1]);
 
         // Draw next tab (right)
         let next_text = Line::from(vec![
-            Span::styled(next_tab.name(), Style::default().fg(Color::Gray)),
-            Span::styled(" →", Style::default().fg(Color::Gray)),
+            Span::styled(next_tab.name(), Style::default().fg(t.muted)),
+            Span::styled(" ->", Style::default().fg(t.muted)),
         ]);
         let next_paragraph = Paragraph::new(next_text)
             .alignment(Alignment::Right)
@@ -493,17 +615,23 @@ impl App {
     /// Draw the footer with help information
     fn draw_footer(&self, frame: &mut Frame, area: Rect) {
         let footer_text = if self.in_container_subview {
-            // Show sub-view specific help
             match self.containers_tab.get_view_mode() {
-                ContainerViewMode::Logs => "Logs: ↑/↓ scroll | f follow | t timestamps | c clear | Esc back",
-                ContainerViewMode::Shell => "Shell: F1 toggle mode | Type commands | ↑/↓ history | Tab switch shell | Esc back",
-                ContainerViewMode::Stats => "Stats: ←/→ switch view | r reset | p pause | +/- interval | Esc back",
+                ContainerViewMode::Logs => "Logs: Up/Down scroll | f follow | t timestamps | x export txt | X export json | Esc back",
+                ContainerViewMode::Shell => "Shell: F1 toggle mode | Type commands | Up/Down history | Tab switch shell | Esc back",
+                ContainerViewMode::Stats => "Stats: Left/Right switch view | r reset | p pause | +/- interval | Esc back",
+                ContainerViewMode::Inspect => "Inspect: Left/Right sections | Up/Down scroll | Esc back",
+                ContainerViewMode::Topology => "Topology: Up/Down scroll | r refresh | Esc back",
                 _ => "Container sub-view - Press Esc to return",
             }
         } else if self.show_cheatsheet {
             "Cheatsheet: Press Esc to close"
         } else {
-            "Global: q quit | c help | ←/→ navigate | Container: l logs | e shell | s stats | / search"
+            match self.current_tab {
+                TabType::Containers => "q quit | c help | o sort | Space select | l logs | e shell | s stats | C compose up | W compose down",
+                TabType::Images => "q quit | c help | o sort | D delete | p prune | P pull | R run container",
+                TabType::System => "q quit | c help | Left/Right views | r refresh",
+                _ => "q quit | c help | o sort | D delete | p prune",
+            }
         };
 
         let status_text = if let Some(ref global_status) = self.global_status {
@@ -522,7 +650,7 @@ impl App {
         };
 
         let footer = Paragraph::new(format!("{footer_text}{status_text}"))
-            .style(Style::default().fg(Color::Gray))
+            .style(Style::default().fg(self.theme.muted))
             .alignment(Alignment::Center);
 
         frame.render_widget(footer, area);

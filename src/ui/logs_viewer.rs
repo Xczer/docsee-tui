@@ -215,6 +215,8 @@ impl LogsViewer {
                     Some("Search: Type to filter logs (coming soon!)".to_string());
             }
             Key::Char('r') => self.refresh_display(),
+            Key::Char('x') => self.export_logs_plaintext(),
+            Key::Char('X') => self.export_logs_json(),
             _ => {}
         }
 
@@ -716,6 +718,108 @@ impl LogsViewer {
         }
 
         Ok(())
+    }
+
+    /// Export logs as plaintext
+    fn export_logs_plaintext(&mut self) {
+        let container_name = self
+            .container
+            .as_ref()
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let dir = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("docsee-logs");
+
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            self.status_message = Some(format!("Failed to create dir: {}", e));
+            return;
+        }
+
+        let filename = format!("{}_{}.txt", container_name, timestamp);
+        let path = dir.join(&filename);
+
+        let mut content = String::new();
+        for entry in &self.log_entries {
+            let stream_label = match entry.stream {
+                LogStream::Stdout => "STDOUT",
+                LogStream::Stderr => "STDERR",
+            };
+            content.push_str(&format!(
+                "[{}] {} {}\n",
+                entry.timestamp, stream_label, entry.content
+            ));
+        }
+
+        match std::fs::write(&path, &content) {
+            Ok(_) => {
+                self.status_message = Some(format!(
+                    "Exported {} lines to {}",
+                    self.log_entries.len(),
+                    path.display()
+                ));
+            }
+            Err(e) => {
+                self.status_message = Some(format!("Failed to write: {}", e));
+            }
+        }
+    }
+
+    /// Export logs as JSON
+    fn export_logs_json(&mut self) {
+        let container_name = self
+            .container
+            .as_ref()
+            .map(|c| c.name.clone())
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+        let dir = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("docsee-logs");
+
+        if let Err(e) = std::fs::create_dir_all(&dir) {
+            self.status_message = Some(format!("Failed to create dir: {}", e));
+            return;
+        }
+
+        let filename = format!("{}_{}.json", container_name, timestamp);
+        let path = dir.join(&filename);
+
+        let entries: Vec<serde_json::Value> = self
+            .log_entries
+            .iter()
+            .map(|entry| {
+                serde_json::json!({
+                    "timestamp": entry.timestamp,
+                    "stream": match entry.stream {
+                        LogStream::Stdout => "stdout",
+                        LogStream::Stderr => "stderr",
+                    },
+                    "content": entry.content,
+                })
+            })
+            .collect();
+
+        match serde_json::to_string_pretty(&entries) {
+            Ok(json) => match std::fs::write(&path, &json) {
+                Ok(_) => {
+                    self.status_message = Some(format!(
+                        "Exported {} lines to {}",
+                        self.log_entries.len(),
+                        path.display()
+                    ));
+                }
+                Err(e) => {
+                    self.status_message = Some(format!("Failed to write: {}", e));
+                }
+            },
+            Err(e) => {
+                self.status_message = Some(format!("JSON error: {}", e));
+            }
+        }
     }
 
     /// Get the current container
